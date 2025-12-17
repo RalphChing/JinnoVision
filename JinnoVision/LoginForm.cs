@@ -11,6 +11,7 @@ namespace JinnoVision
         public LoginForm()
         {
             InitializeComponent();
+            var gittest = 0;
         }
 
         private void btnLogin_Click(object sender, EventArgs e)
