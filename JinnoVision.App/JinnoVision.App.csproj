@@ -7,8 +7,8 @@
     <ProjectGuid>{49D77D87-79F7-429B-BA8A-CD686157E0CA}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>JinnoVIsion.Application</RootNamespace>
-    <AssemblyName>JinnoVIsion.Application</AssemblyName>
+    <RootNamespace>JinnoVision.App</RootNamespace>
+    <AssemblyName>JinnoVision.App</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>

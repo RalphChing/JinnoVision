@@ -89,10 +89,6 @@
     <None Include="Resources\jinno_logo.png" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\JinnoVIsion.Application\JinnoVision.App.csproj">
-      <Project>{49d77d87-79f7-429b-ba8a-cd686157e0ca}</Project>
-      <Name>JinnoVision.App</Name>
-    </ProjectReference>
     <ProjectReference Include="..\JinnoVision.Domain\JinnoVision.Domain.csproj">
       <Project>{c9c4e96c-43ce-4607-a050-7d66e0c2c130}</Project>
       <Name>JinnoVision.Domain</Name>

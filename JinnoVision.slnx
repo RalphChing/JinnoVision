@@ -1,5 +1,5 @@
 <Solution>
-  <Project Path="JinnoVIsion.Application/JinnoVision.App.csproj" Id="49d77d87-79f7-429b-ba8a-cd686157e0ca" />
+  <Project Path="JinnoVision.App/JinnoVision.App.csproj" Id="49d77d87-79f7-429b-ba8a-cd686157e0ca" />
   <Project Path="JinnoVision.Domain/JinnoVision.Domain.csproj" Id="c9c4e96c-43ce-4607-a050-7d66e0c2c130" />
   <Project Path="JinnoVision.Infrastructure/JinnoVision.Infrastructure.csproj" Id="158de64d-a397-4678-a835-582aaaf0e1d0" />
   <Project Path="JinnoVision/JinnoVision.csproj" Id="4e63835e-57aa-435b-81f3-52df38d7f804" />
