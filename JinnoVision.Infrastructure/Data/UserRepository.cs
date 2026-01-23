@@ -1,8 +1,8 @@
-﻿using JinnoVision.Domain.Entities;
-using JinnoVision.Domain.Interfaces;
-using System.Data;
-using System.Data.SqlClient;
+﻿using System.Data;
 using System.Threading.Tasks;
+using Dapper;
+using JinnoVision.Domain.Entities;
+using JinnoVision.Domain.Interfaces;
 
 namespace JinnoVision.Infrastructure.Data
 {
@@ -17,49 +17,28 @@ namespace JinnoVision.Infrastructure.Data
 
         public async Task<User> GetByCredentialsAsync(string username, string password)
         {
+            const string sql = @"
+                SELECT TOP 1 
+                    U.UserId AS Id,
+                    U.Username,
+                    U.Password,
+                    U.IsActive,
+                    R.RoleName AS Role
+                FROM Users U
+                LEFT JOIN UserRoles UR ON UR.UserId = U.UserId
+                LEFT JOIN Roles R ON R.RoleId = UR.RoleId
+                WHERE U.Username = @Username
+                  AND U.Password = @Password
+                  AND U.IsActive = 1;
+            ";
+
             using (IDbConnection conn = _connectionFactory.CreateConnection())
             {
-                await ((SqlConnection)conn).OpenAsync();
-
-                const string sql = @"
-                    SELECT TOP 1 UserId, Username, Password, IsActive
-                    FROM Users
-                    WHERE Username = @Username
-                      AND Password = @Password
-                      AND IsActive = 1;
-                ";
-
-                using (var cmd = conn.CreateCommand())
-                {
-                    cmd.CommandText = sql;
-
-                    var pUser = cmd.CreateParameter();
-                    pUser.ParameterName = "@Username";
-                    pUser.Value = username;
-                    cmd.Parameters.Add(pUser);
-
-                    var pPass = cmd.CreateParameter();
-                    pPass.ParameterName = "@Password";
-                    pPass.Value = password;
-                    cmd.Parameters.Add(pPass);
-
-                    using (var reader = await ((SqlCommand)cmd).ExecuteReaderAsync())
-                    {
-                        if (await reader.ReadAsync())
-                        {
-                            return new User
-                            {
-                                Id = reader.GetInt32(reader.GetOrdinal("UserId")),
-                                Username = reader.GetString(reader.GetOrdinal("Username")),
-                                Password = reader.GetString(reader.GetOrdinal("Password")),
-                                IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive"))
-                            };
-                        }
-                    }
-                }
+                return await conn.QueryFirstOrDefaultAsync<User>(
+                    sql,
+                    new { Username = username, Password = password }
+                );
             }
-
-            return null;
         }
     }
 }
