@@ -43,8 +43,9 @@
     <Reference Include="AForge.Video.DirectShow, Version=2.2.5.0, Culture=neutral, PublicKeyToken=61ea4348d43881b7, processorArchitecture=MSIL">
       <HintPath>..\packages\AForge.Video.DirectShow.2.2.5\lib\AForge.Video.DirectShow.dll</HintPath>
     </Reference>
-    <Reference Include="MvCameraControl.Net">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\MVS\Development\DotNet\win64\net40\MvCameraControl.Net.dll</HintPath>
+    <Reference Include="MvCameraControl.Net, Version=4.7.0.2, Culture=neutral, PublicKeyToken=a3c7c5e3a730cd12, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\lib\hik\MvCameraControl.Net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
