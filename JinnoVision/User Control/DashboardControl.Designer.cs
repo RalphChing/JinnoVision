@@ -5,87 +5,131 @@ namespace JinnoVision.User_Control
 {
     partial class DashboardControl
     {
-        private TextBox txtScene;
+        private System.ComponentModel.IContainer components = null;
+
         private GroupBox grpCamera;
-        private ComboBox cboCameras;
-        private Button btnStartCamera;
-        private Button btnStopCamera;
         private PictureBox picCamera;
+        private Button btnConnect;
+        private Button btnStart;
+        private Button btnStop; 
+        private Button btnDisconnect;
+        private Label lblStatus;
+
+        private GroupBox grpVision;
+        private Button btnRunCodeRead;
+        private TextBox txtVisionResult;
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+                components.Dispose();
+
+            base.Dispose(disposing);
+        }
 
         private void InitializeComponent()
         {
-            this.txtScene = new System.Windows.Forms.TextBox();
-            this.grpCamera = new System.Windows.Forms.GroupBox();
-            this.cboCameras = new System.Windows.Forms.ComboBox();
-            this.btnStartCamera = new System.Windows.Forms.Button();
-            this.btnStopCamera = new System.Windows.Forms.Button();
-            this.picCamera = new System.Windows.Forms.PictureBox();
+            this.grpCamera = new GroupBox();
+            this.picCamera = new PictureBox();
+            this.btnConnect = new Button();
+            this.btnStart = new Button();
+            this.btnStop = new Button();
+            this.btnDisconnect = new Button();
+            this.lblStatus = new Label();
+
+            this.grpVision = new GroupBox();
+            this.btnRunCodeRead = new Button();
+            this.txtVisionResult = new TextBox();
 
             this.grpCamera.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picCamera)).BeginInit();
+            this.grpVision.SuspendLayout();
             this.SuspendLayout();
-            // 
-            // txtScene
-            // 
-            this.txtScene.Dock = System.Windows.Forms.DockStyle.Top;
-            this.txtScene.Font = new System.Drawing.Font("Segoe UI", 12F);
-            this.txtScene.ReadOnly = true;
-            this.txtScene.BorderStyle = BorderStyle.None;
-            this.txtScene.BackColor = System.Drawing.Color.WhiteSmoke;
-            this.txtScene.Text = "Dashboard scene loaded";
-            this.txtScene.Margin = new Padding(20);
-            this.txtScene.Height = 40;
-            // 
+
+            // ======================
             // grpCamera
-            // 
+            // ======================
             this.grpCamera.Text = "Live Camera";
-            this.grpCamera.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-            this.grpCamera.Dock = DockStyle.Fill;
-            this.grpCamera.Padding = new Padding(10);
-            this.grpCamera.Controls.Add(this.picCamera);
-            this.grpCamera.Controls.Add(this.btnStopCamera);
-            this.grpCamera.Controls.Add(this.btnStartCamera);
-            this.grpCamera.Controls.Add(this.cboCameras);
-            // 
-            // cboCameras
-            // 
-            this.cboCameras.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.cboCameras.Location = new Point(15, 25);
-            this.cboCameras.Width = 250;
-            this.cboCameras.Name = "cboCameras";
-            // 
-            // btnStartCamera
-            // 
-            this.btnStartCamera.Text = "Start";
-            this.btnStartCamera.Location = new Point(280, 23);
-            this.btnStartCamera.Size = new Size(75, 27);
-            this.btnStartCamera.Name = "btnStartCamera";
-            // 
-            // btnStopCamera
-            // 
-            this.btnStopCamera.Text = "Stop";
-            this.btnStopCamera.Location = new Point(365, 23);
-            this.btnStopCamera.Size = new Size(75, 27);
-            this.btnStopCamera.Name = "btnStopCamera";
-            // 
+            this.grpCamera.Font = new Font("Segoe UI", 10F);
+            this.grpCamera.Location = new Point(10, 10);
+            this.grpCamera.Size = new Size(1000, 600);
+
+            // btnConnect
+            this.btnConnect.Text = "Connect";
+            this.btnConnect.Location = new Point(15, 30);
+            this.btnConnect.Size = new Size(90, 30);
+
+            // btnStart
+            this.btnStart.Text = "Start";
+            this.btnStart.Location = new Point(115, 30);
+            this.btnStart.Size = new Size(90, 30);
+
+            // btnStop
+            this.btnStop.Text = "Stop";
+            this.btnStop.Location = new Point(215, 30);
+            this.btnStop.Size = new Size(90, 30);
+
+            // btnDisconnect
+            this.btnDisconnect = new Button();
+            this.btnDisconnect.Text = "Disconnect";
+            this.btnDisconnect.Location = new Point(315, 30);
+            this.btnDisconnect.Size = new Size(100, 30);
+
+            // lblStatus
+            this.lblStatus.Text = "Idle";
+            this.lblStatus.Location = new Point(330, 35);
+            this.lblStatus.AutoSize = true;
+
             // picCamera
-            // 
-            this.picCamera.Location = new Point(15, 60);
-            this.picCamera.Name = "picCamera";
-            this.picCamera.Size = new Size(640, 360);
-            this.picCamera.SizeMode = PictureBoxSizeMode.StretchImage;
+            this.picCamera.Location = new Point(15, 70);
+            this.picCamera.Size = new Size(960, 500);
             this.picCamera.BackColor = Color.Black;
-            // 
+            this.picCamera.SizeMode = PictureBoxSizeMode.Zoom;
+
+            this.grpCamera.Controls.Add(this.btnConnect);
+            this.grpCamera.Controls.Add(this.btnStart);
+            this.grpCamera.Controls.Add(this.btnStop);
+            this.grpCamera.Controls.Add(this.btnDisconnect);
+            this.grpCamera.Controls.Add(this.lblStatus);
+            this.grpCamera.Controls.Add(this.picCamera);
+
+            // ======================
+            // grpVision
+            // ======================
+            this.grpVision.Text = "Vision Test";
+            this.grpVision.Font = new Font("Segoe UI", 10F);
+            this.grpVision.Location = new Point(1020, 10);
+            this.grpVision.Size = new Size(350, 600);
+
+            // btnRunCodeRead
+            this.btnRunCodeRead.Text = "Run Code Read";
+            this.btnRunCodeRead.Location = new Point(20, 30);
+            this.btnRunCodeRead.Size = new Size(150, 35);
+
+            // txtVisionResult
+            this.txtVisionResult.Location = new Point(20, 80);
+            this.txtVisionResult.Size = new Size(300, 450);
+            this.txtVisionResult.Multiline = true;
+            this.txtVisionResult.ScrollBars = ScrollBars.Vertical;
+            this.txtVisionResult.Font = new Font("Consolas", 10F);
+
+            this.grpVision.Controls.Add(this.btnRunCodeRead);
+            this.grpVision.Controls.Add(this.txtVisionResult);
+
+            // ======================
             // DashboardControl
-            // 
-            this.BackColor = System.Drawing.Color.WhiteSmoke;
+            // ======================
             this.Controls.Add(this.grpCamera);
-            this.Controls.Add(this.txtScene);
-            this.Name = "DashboardControl";
-            this.Dock = DockStyle.Fill;
+            this.Controls.Add(this.grpVision);
+
+            this.Size = new Size(1400, 620);
+            this.BackColor = Color.WhiteSmoke;
 
             this.grpCamera.ResumeLayout(false);
+            this.grpCamera.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picCamera)).EndInit();
+            this.grpVision.ResumeLayout(false);
+            this.grpVision.PerformLayout();
             this.ResumeLayout(false);
         }
     }

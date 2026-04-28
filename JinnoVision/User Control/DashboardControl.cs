@@ -1,146 +1,137 @@
-﻿using System;
+﻿using AForge.Video;
+using AForge.Video.DirectShow;
+using JinnoVision.App.Services;
+using JinnoVision.Models;
+using JinnoVision.Services;
+using JinnoVision.Services.Camera;
+using JinnoVision.Services.Vision;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
-using AForge.Video;
-using AForge.Video.DirectShow;
 
 namespace JinnoVision.User_Control
 {
     public partial class DashboardControl : UserControl
     {
-        private FilterInfoCollection _videoDevices;
-        private VideoCaptureDevice _videoSource;
+        private ICameraService _cameraService;
+        private readonly CodeReaderModule _codeReaderModule;
 
         public DashboardControl()
         {
             InitializeComponent();
 
-            LoadAvailableCameras();
+            _codeReaderModule = new CodeReaderModule();
 
-            btnStartCamera.Click += BtnStartCamera_Click;
-            btnStopCamera.Click += BtnStopCamera_Click;
-
+            btnRunCodeRead.Click += BtnRunCodeRead_Click;
+        
+            btnConnect.Click += BtnConnect_Click;
+            btnDisconnect.Click += BtnDisconnect_Click;
+            btnStart.Click += BtnStart_Click;
+            btnStop.Click += BtnStop_Click;
             this.Disposed += DashboardControl_Disposed;
         }
 
-        private void LoadAvailableCameras()
+        private void BtnConnect_Click(object sender, EventArgs e)
         {
             try
             {
-                _videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+                _cameraService?.Dispose();
+                _cameraService = new HikMvsCameraService();
+                _cameraService.FrameReceived += CameraService_FrameReceived;
 
-                cboCameras.Items.Clear();
-
-                if (_videoDevices.Count == 0)
-                {
-                    cboCameras.Items.Add("No cameras found");
-                    cboCameras.SelectedIndex = 0;
-                    btnStartCamera.Enabled = false;
-                    return;
-                }
-
-                foreach (FilterInfo device in _videoDevices)
-                {
-                    cboCameras.Items.Add(device.Name);
-                }
-
-                cboCameras.SelectedIndex = 0;
-                btnStartCamera.Enabled = true;
+                bool ok = _cameraService.InitializeAndOpenFirstCamera();
+                lblStatus.Text = ok ? "Camera connected" : "Camera not found / open failed";
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error loading cameras: " + ex.Message,
-                    "Camera Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                btnStartCamera.Enabled = false;
+                lblStatus.Text = "Connect error";
+                MessageBox.Show(ex.Message, "Camera Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void BtnStartCamera_Click(object sender, EventArgs e)
-        {
-            if (_videoDevices == null || _videoDevices.Count == 0)
-                return;
-
-            // Stop previous source if running
-            StopCamera();
-
-            int index = cboCameras.SelectedIndex;
-            if (index < 0 || index >= _videoDevices.Count)
-                return;
-
-            _videoSource = new VideoCaptureDevice(_videoDevices[index].MonikerString);
-            _videoSource.NewFrame += VideoSource_NewFrame;
-            _videoSource.Start();
-        }
-
-        private void BtnStopCamera_Click(object sender, EventArgs e)
-        {
-            StopCamera();
-        }
-
-        private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs)
+        private void BtnDisconnect_Click(object sender, EventArgs e)
         {
             try
             {
-                // Clone the frame because AForge reuses the buffer
-                Bitmap frame = (Bitmap)eventArgs.Frame.Clone();
+                _cameraService?.Stop();
+                _cameraService?.Close();
 
-                // Update the PictureBox on the UI thread
-                if (picCamera.InvokeRequired)
-                {
-                    picCamera.BeginInvoke(new Action(() =>
-                    {
-                        var old = picCamera.Image;
-                        picCamera.Image = frame;
-                        old?.Dispose();
-                    }));
-                }
-                else
-                {
-                    var old = picCamera.Image;
-                    picCamera.Image = frame;
-                    old?.Dispose();
-                }
+                picCamera.Image = null;
+                lblStatus.Text = "Disconnected";
             }
-            catch
+            catch (Exception ex)
             {
-                // swallow frame errors to avoid crashing the UI
+                MessageBox.Show(ex.Message, "Disconnect Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void StopCamera()
+        private void BtnStart_Click(object sender, EventArgs e)
         {
-            if (_videoSource != null)
-            {
-                try
-                {
-                    if (_videoSource.IsRunning)
-                    {
-                        _videoSource.SignalToStop();
-                        _videoSource.WaitForStop();
-                    }
-                }
-                catch
-                {
-                    // ignore shutdown exceptions
-                }
-                finally
-                {
-                    _videoSource.NewFrame -= VideoSource_NewFrame;
-                    _videoSource = null;
-                }
-            }
+            if (_cameraService == null)
+                return;
 
-            // Optional: clear the last frame
-            if (picCamera.Image != null)
+            bool ok = _cameraService.Start(picCamera.Handle);
+            lblStatus.Text = ok ? "Live View" : "Start failed";
+        }
+
+        private void BtnStop_Click(object sender, EventArgs e)
+        {
+            _cameraService?.Stop();
+            lblStatus.Text = "Stopped";
+        }
+
+        private void BtnRunCodeRead_Click(object sender, EventArgs e)
+        {
+            using (var ofd = new OpenFileDialog())
             {
-                picCamera.Image.Dispose();
-                picCamera.Image = null;
+                ofd.Filter = "Image Files|*.bmp;*.png;*.jpg;*.jpeg;*.tif;*.tiff";
+
+                if (ofd.ShowDialog() != DialogResult.OK)
+                    return;
+
+                CodeReadResult result = _codeReaderModule.Run(ofd.FileName);
+
+                if (result.Success)
+                {
+                    txtVisionResult.Text =
+                        $"Type: {result.CodeType}{Environment.NewLine}" +
+                        $"Text: {result.CodeText}";
+                }
+                else
+                {
+                    txtVisionResult.Text = $"Failed: {result.ErrorMessage}";
+                }
             }
+        }
+
+        private void CameraService_FrameReceived(object sender, CameraFrameEventArgs e)
+        {
+            if (picCamera.InvokeRequired)
+            {
+                picCamera.BeginInvoke(new Action(() => UpdatePreview(e.Frame)));
+            }
+            else
+            {
+                UpdatePreview(e.Frame);
+            }
+        }
+
+        private void UpdatePreview(Bitmap frame)
+        {
+            var old = picCamera.Image;
+            picCamera.Image = frame;
+            old?.Dispose();
         }
 
         private void DashboardControl_Disposed(object sender, EventArgs e)
         {
-            StopCamera();
+            if (_cameraService != null)
+            {
+                _cameraService.FrameReceived -= CameraService_FrameReceived;
+                _cameraService.Dispose();
+                _cameraService = null;
+            }
         }
     }
 }
