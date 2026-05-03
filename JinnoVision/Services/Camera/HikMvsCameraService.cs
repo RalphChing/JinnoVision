@@ -1,12 +1,12 @@
-﻿using System;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
-using JinnoVision.Services.Camera;
-
+﻿using JinnoVision.Services.Camera;
 // Adjust this using to match the namespace from your installed MVS C# sample.
 // Common examples use MvCamCtrl.NET or a MyCamera wrapper class supplied by Hikrobot.
 using MvCamCtrl.NET;
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
 
 namespace JinnoVision.Services.Camera
 {
@@ -59,7 +59,7 @@ namespace JinnoVision.Services.Camera
             // Register callback mode.
             // The MVS guide says callback and polling methods should not be used together.
             _imageCallback = new MyCamera.cbOutputExdelegate(OnImageGrabbed);
-            nRet = _camera.MV_CC_RegisterImageCallBackEx_NET(_imageCallback, IntPtr.Zero);
+            //nRet = _camera.MV_CC_RegisterImageCallBackEx_NET(_imageCallback, IntPtr.Zero);
             if (nRet != MyCamera.MV_OK)
             {
                 Close();
@@ -76,12 +76,17 @@ namespace JinnoVision.Services.Camera
 
             int nRet = _camera.MV_CC_StartGrabbing_NET();
             if (nRet != MyCamera.MV_OK)
+            {
+                MessageBox.Show($"StartGrabbing failed: 0x{nRet:X}");
                 return false;
+            }
 
-            // 🔥 This enables live display
             nRet = _camera.MV_CC_Display_NET(displayHandle);
             if (nRet != MyCamera.MV_OK)
+            {
+                MessageBox.Show($"Display failed: 0x{nRet:X}");
                 return false;
+            }
 
             _isGrabbing = true;
             return true;

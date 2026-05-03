@@ -72,7 +72,7 @@ namespace JinnoVision.User_Control
             // btnDisconnect
             this.btnDisconnect = new Button();
             this.btnDisconnect.Text = "Disconnect";
-            this.btnDisconnect.Location = new Point(315, 30);
+            this.btnDisconnect.Location = new Point(515, 30);
             this.btnDisconnect.Size = new Size(100, 30);
 
             // lblStatus

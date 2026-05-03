@@ -26,27 +26,15 @@ namespace JinnoVision.User_Control
 
         private void InitializeComponent()
         {
-            this.txtScene = new TextBox();
             this.SuspendLayout();
-            // 
-            // txtScene
-            // 
-            this.txtScene.Dock = DockStyle.Top;
-            this.txtScene.Font = new Font("Segoe UI", 12F);
-            this.txtScene.ReadOnly = true;
-            this.txtScene.BorderStyle = BorderStyle.None;
-            this.txtScene.BackColor = Color.WhiteSmoke;
-            this.txtScene.Text = "Setup scene loaded";
-            this.txtScene.Margin = new Padding(20);
-            this.txtScene.Height = 40;
             // 
             // SetupControl
             // 
-            this.BackColor = Color.WhiteSmoke;
-            this.Controls.Add(this.txtScene);
+            this.BackColor = System.Drawing.Color.WhiteSmoke;
             this.Name = "SetupControl";
-            this.Dock = DockStyle.Fill;
+            this.Size = new System.Drawing.Size(2199, 1087);
             this.ResumeLayout(false);
+
         }
         #endregion
     }
