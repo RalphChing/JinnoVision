@@ -1,0 +1,14 @@
+{
+  "RoiId": "ROI_001",
+  "RoiName": "R1",
+  "ComponentName": "THERMISTOR_BLACK",
+  "X": 133,
+  "Y": 138,
+  "Width": 199,
+  "Height": 194,
+  "RoiType": null,
+  "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TempRecipes\\RCP-20260504045135_ai test\\Step_001\\ROI_001_R1\\template.png",
+  "TargetClassName": "OK",
+  "Classification": "PASS",
+  "ConfidenceThreshold": 85
+}

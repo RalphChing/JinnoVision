@@ -14,11 +14,13 @@ namespace JinnoVision.User_Control
         private Button btnStop; 
         private Button btnDisconnect;
         private Label lblStatus;
+        private Button btnCaptureInspect;
 
         private GroupBox grpVision;
         private Button btnRunCodeRead;
         private TextBox txtVisionResult;
-
+        private GroupBox grpCapture;
+        private PictureBox picCapture;
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -35,11 +37,14 @@ namespace JinnoVision.User_Control
             this.btnStart = new Button();
             this.btnStop = new Button();
             this.btnDisconnect = new Button();
+            this.btnCaptureInspect = new Button();
             this.lblStatus = new Label();
 
             this.grpVision = new GroupBox();
             this.btnRunCodeRead = new Button();
             this.txtVisionResult = new TextBox();
+            this.grpCapture = new GroupBox();
+            this.picCapture = new PictureBox();
 
             this.grpCamera.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picCamera)).BeginInit();
@@ -69,6 +74,11 @@ namespace JinnoVision.User_Control
             this.btnStop.Location = new Point(215, 30);
             this.btnStop.Size = new Size(90, 30);
 
+            // btnCaptureInspect
+            this.btnCaptureInspect.Text = "Capture + Inspect";
+            this.btnCaptureInspect.Location = new Point(315, 30);
+            this.btnCaptureInspect.Size = new Size(160, 30);
+
             // btnDisconnect
             this.btnDisconnect = new Button();
             this.btnDisconnect.Text = "Disconnect";
@@ -77,7 +87,7 @@ namespace JinnoVision.User_Control
 
             // lblStatus
             this.lblStatus.Text = "Idle";
-            this.lblStatus.Location = new Point(330, 35);
+            this.lblStatus.Location = new Point(630, 35);
             this.lblStatus.AutoSize = true;
 
             // picCamera
@@ -89,16 +99,31 @@ namespace JinnoVision.User_Control
             this.grpCamera.Controls.Add(this.btnConnect);
             this.grpCamera.Controls.Add(this.btnStart);
             this.grpCamera.Controls.Add(this.btnStop);
+            this.grpCamera.Controls.Add(this.btnCaptureInspect);
             this.grpCamera.Controls.Add(this.btnDisconnect);
             this.grpCamera.Controls.Add(this.lblStatus);
             this.grpCamera.Controls.Add(this.picCamera);
+            // ======================
+            // grpCapture
+            // ======================
+            this.grpCapture.Text = "Captured Inspection";
+            this.grpCapture.Font = new Font("Segoe UI", 10F);
+            this.grpCapture.Location = new Point(1020, 10);
+            this.grpCapture.Size = new Size(500, 600);
 
+            // picCapture
+            this.picCapture.Location = new Point(15, 30);
+            this.picCapture.Size = new Size(470, 540);
+            this.picCapture.BackColor = Color.Black;
+            this.picCapture.SizeMode = PictureBoxSizeMode.Zoom;
+
+            this.grpCapture.Controls.Add(this.picCapture);
             // ======================
             // grpVision
             // ======================
             this.grpVision.Text = "Vision Test";
             this.grpVision.Font = new Font("Segoe UI", 10F);
-            this.grpVision.Location = new Point(1020, 10);
+            this.grpVision.Location = new Point(1530, 10);
             this.grpVision.Size = new Size(350, 600);
 
             // btnRunCodeRead
@@ -120,9 +145,9 @@ namespace JinnoVision.User_Control
             // DashboardControl
             // ======================
             this.Controls.Add(this.grpCamera);
+            this.Controls.Add(this.grpCapture);
             this.Controls.Add(this.grpVision);
-
-            this.Size = new Size(1400, 620);
+            this.Size = new Size(1900, 620);
             this.BackColor = Color.WhiteSmoke;
 
             this.grpCamera.ResumeLayout(false);

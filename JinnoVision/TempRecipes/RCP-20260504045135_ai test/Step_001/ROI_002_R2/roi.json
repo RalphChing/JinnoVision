@@ -1,0 +1,14 @@
+{
+  "RoiId": "ROI_002",
+  "RoiName": "R2",
+  "ComponentName": "THERMISTOR_FAIL",
+  "X": 402,
+  "Y": 230,
+  "Width": 247,
+  "Height": 212,
+  "RoiType": null,
+  "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TempRecipes\\RCP-20260504045135_ai test\\Step_001\\ROI_002_R2\\template.png",
+  "TargetClassName": "NG",
+  "Classification": "FAIL",
+  "ConfidenceThreshold": 85
+}

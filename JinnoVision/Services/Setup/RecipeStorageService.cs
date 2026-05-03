@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Drawing;
 
 namespace JinnoVision.Services.Setup
 {
@@ -43,7 +44,7 @@ namespace JinnoVision.Services.Setup
 
                     Directory.CreateDirectory(roiFolder);
 
-                    roi.ImagePath = Path.Combine(roiFolder, "template.png");
+                    //roi.ImagePath = Path.Combine(roiFolder, "template.png");
 
                     SaveJson(Path.Combine(roiFolder, "roi.json"), roi);
                 }
@@ -119,6 +120,31 @@ namespace JinnoVision.Services.Setup
             string json = File.ReadAllText(jsonPath);
 
             return JsonSerializer.Deserialize<RecipeModel>(json);
+        }
+        public string SaveTrainingImage(
+            Image image,
+            string componentName,
+            string passFail,
+            string roiId)
+        {
+            string root = Path.GetFullPath(
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\TrainingData")
+            );
+
+            string folder = Path.Combine(
+                root,
+                MakeSafeFileName(componentName),
+                MakeSafeFileName(passFail)
+            );
+
+            Directory.CreateDirectory(folder);
+
+            string fileName = $"{roiId}_{DateTime.Now:yyyyMMdd_HHmmssfff}.png";
+            string path = Path.Combine(folder, fileName);
+
+            image.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+            return path;
         }
     }
 }

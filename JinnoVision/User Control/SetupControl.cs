@@ -1,12 +1,17 @@
-﻿using JinnoVision.Models;
+﻿using JinnoVision.App.Core;
+using JinnoVision.App.Models;
+using JinnoVision.App.Services;
+using JinnoVision.Models;
+using JinnoVision.Services.Camera;
 using JinnoVision.Services.Setup;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
-using System.Text.Json;
-using System.Windows.Forms;
 using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace JinnoVision.User_Control
 {
@@ -29,7 +34,8 @@ namespace JinnoVision.User_Control
         private Button btnRoiConfig;
         private Button btnDetectionParams;
         private Button btnCameraLighting;
-
+        private Button btnRetrainModel;
+        private TextBox txtComponentName;
         private TextBox txtRecipeName;
         private Label lblRecipeId;
 
@@ -54,8 +60,13 @@ namespace JinnoVision.User_Control
         private Point _dragStartPoint;
         private Rectangle _dragStartRect;
 
+        private ICameraService _cameraService;
+        private Button btnCaptureSetupFrame;
+        private Bitmap _setupCapturedFrame;
+
         private List<RecipeModel> _recipes = new List<RecipeModel>();
-        private RoiInfoModel _selectedRoi;
+        private RoiInfoModel _selectedRoi; 
+        private readonly TrainingService _trainingService = new TrainingService();
 
         private enum RoiResizeHandle
         {
@@ -74,7 +85,6 @@ namespace JinnoVision.User_Control
         public SetupControl()
         {
             InitializeComponent();
-
             _recipeStorageService = new RecipeStorageService();
 
             BuildLayout();
@@ -82,6 +92,7 @@ namespace JinnoVision.User_Control
 
             LoadRecipesToLeftPanel();
             LoadMostRecentRecipe();
+            this.Disposed += SetupControl_Disposed;
         }
 
         private void WireEvents()
@@ -90,8 +101,10 @@ namespace JinnoVision.User_Control
             //btnAddStep.Click += BtnAddStep_Click;
             btnAddRoi.Click += BtnAddRoi_Click;
             btnSaveRoi.Click += BtnSaveRoi_Click;
-            btnSaveRecipe.Click += BtnSaveRecipe_Click; 
+            btnSaveRecipe.Click += BtnSaveRecipe_Click;
+            btnRetrainModel.Click += btnRetrainModel_Click;
             btnDeletePendingRoi.Click += BtnDeletePendingRoi_Click;
+            btnCaptureSetupFrame.Click += BtnCaptureSetupFrame_Click;
         }
         #region Build Panels
         private void BuildLeftPanel(Panel parent)
@@ -212,15 +225,32 @@ namespace JinnoVision.User_Control
                 FlatStyle = FlatStyle.Flat,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-
+            btnRetrainModel = new Button
+            {
+                Text = "Retrain Model",
+                Width = 140,
+                Height = 38,
+                BackColor = Color.FromArgb(46, 160, 67), // green-ish (different from Save)
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
+            btnRetrainModel.Location = new Point(
+                btnSaveRecipe.Left - btnRetrainModel.Width - 10,
+                btnSaveRecipe.Top
+            );
             panelHeader.Resize += (s, e) =>
             {
                 btnSaveRecipe.Left = panelHeader.Width - btnSaveRecipe.Width - 20;
+
+                btnRetrainModel.Left = btnSaveRecipe.Left - btnRetrainModel.Width - 10;
+                btnRetrainModel.Top = btnSaveRecipe.Top;
             };
             panelHeader.Controls.Add(lblName);
             panelHeader.Controls.Add(txtRecipeName);
             panelHeader.Controls.Add(lblRecipeId);
             panelHeader.Controls.Add(btnSaveRecipe);
+            panelHeader.Controls.Add(btnRetrainModel);
 
             parent.Controls.Add(panelHeader);
             panelHeader.BringToFront();
@@ -282,30 +312,45 @@ namespace JinnoVision.User_Control
                 FlatStyle = FlatStyle.Flat,
                 Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
-
+            btnCaptureSetupFrame = new Button
+            {
+                Text = "Capture Frame",
+                Width = 130,
+                Height = 35,
+                Location = new Point(600, 10),
+                BackColor = Color.FromArgb(46, 160, 67),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
             roiHeader.Resize += (s, e) =>
             {
                 btnAddRoi.Left = roiHeader.Width - btnAddRoi.Width - 20;
+
+                btnCaptureSetupFrame.Left = btnAddRoi.Left - btnCaptureSetupFrame.Width - 10;
+                btnCaptureSetupFrame.Top = btnAddRoi.Top;
             };
             roiHeader.Controls.Add(lblRoiTitle);
+            roiHeader.Controls.Add(btnCaptureSetupFrame);
             roiHeader.Controls.Add(btnAddRoi);
-            roiHeader.Controls.Add(btnSaveRoi);
 
             picRoiImage = new PictureBox
             {
                 Dock = DockStyle.Top,
-                Height = 500,
                 BackColor = Color.Black,
                 SizeMode = PictureBoxSizeMode.Zoom
             };
-
-            //test
-            Bitmap testImage = new Bitmap(1000, 600);
-            using (Graphics g = Graphics.FromImage(testImage))
+            picRoiImage.Resize += (s, e) =>
             {
-                g.Clear(Color.DimGray);
-            }
-            picRoiImage.Image = testImage;
+                AdjustRoiImageSize();
+            };
+            //test
+            //Bitmap testImage = new Bitmap(1000, 600);
+            //using (Graphics g = Graphics.FromImage(testImage))
+            //{
+            //    g.Clear(Color.DimGray);
+            //}
+            //picRoiImage.Image = testImage;
             //test
 
             picRoiImage.MouseDown += PicRoiImage_MouseDown;
@@ -315,7 +360,8 @@ namespace JinnoVision.User_Control
 
             panelRois = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
+                Height = 400,
                 BackColor = Color.White,
                 Padding = new Padding(10),
                 FlowDirection = FlowDirection.TopDown,
@@ -410,6 +456,8 @@ namespace JinnoVision.User_Control
 
             _recipes.Add(_currentRecipe);
             LoadRecipesToLeftPanel();
+
+            StartSetupLiveCamera();
         }
 
         private void BtnAddStep_Click(object sender, EventArgs e)
@@ -482,28 +530,73 @@ namespace JinnoVision.User_Control
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(txtRoiName.Text))
+            {
+                MessageBox.Show("Please enter ROI name.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(txtComponentName.Text))
+            {
+                MessageBox.Show("Please enter component name.");
+                return;
+            }
+
             var step = GetCurrentStep();
+
+            string classification = cmbRoiClass.SelectedIndex == 0 ? "PASS" : "FAIL";
 
             var roi = new RoiInfoModel
             {
                 RoiId = $"ROI_{step.Rois.Count + 1:000}",
                 RoiName = txtRoiName.Text.Trim(),
+                ComponentName = txtComponentName.Text.Trim(),
+
                 X = _pendingRoiImageRect.X,
                 Y = _pendingRoiImageRect.Y,
                 Width = _pendingRoiImageRect.Width,
                 Height = _pendingRoiImageRect.Height,
-                TargetClassName = cmbRoiClass.SelectedIndex == 0 ? "OK" : "NG",
-                Classification = cmbRoiClass.SelectedIndex == 0 ? "PASS" : "FAIL",
+
+                TargetClassName = classification == "PASS" ? "OK" : "NG",
+                Classification = classification,
                 ConfidenceThreshold = trkConfidence.Value
             };
 
+            string passFail = roi.Classification == "PASS" ? "Pass" : "Fail";
+
+            using (Bitmap source = new Bitmap(picRoiImage.Image))
+            {
+                Rectangle safeRect = Rectangle.Intersect(
+                    new Rectangle(roi.X, roi.Y, roi.Width, roi.Height),
+                    new Rectangle(0, 0, source.Width, source.Height)
+                );
+
+                if (safeRect.Width > 0 && safeRect.Height > 0)
+                {
+                    using (Bitmap crop = source.Clone(safeRect, source.PixelFormat))
+                    {
+                        string trainingImagePath = _recipeStorageService.SaveTrainingImage(
+                            crop,
+                            roi.ComponentName,
+                            passFail,
+                            roi.RoiId
+                        );
+
+                        roi.ImagePath = trainingImagePath;
+                    }
+                }
+            }
+
             step.Rois.Add(roi);
             _selectedRoi = roi;
+
             AddRoiEditorCard(roi, insertAtTop: true);
+
             panelRoiEditor.Visible = false;
 
             _pendingRoiImageRect = Rectangle.Empty;
             _previewRect = Rectangle.Empty;
+
             picRoiImage.Invalidate();
         }
         private void BtnDeletePendingRoi_Click(object sender, EventArgs e)
@@ -513,6 +606,69 @@ namespace JinnoVision.User_Control
             panelRoiEditor.Visible = false;
 
             picRoiImage.Invalidate();
+        }
+        private async void btnRetrainModel_Click(object sender, EventArgs e)
+        {
+            btnRetrainModel.Enabled = false;
+            btnRetrainModel.Text = "Training...";
+
+            try
+            {
+                string output = await _trainingService.RetrainAsync();
+
+                MessageBox.Show(
+                    "Model retrained successfully.\n\n" + output,
+                    "Training Complete",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Training failed:\n\n" + ex.Message,
+                    "Training Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnRetrainModel.Enabled = true;
+                btnRetrainModel.Text = "Retrain Model";
+            }
+        }
+        private void BtnCaptureSetupFrame_Click(object sender, EventArgs e)
+        {
+            if (_cameraService == null)
+            {
+                MessageBox.Show("Camera is not connected.");
+                return;
+            }
+
+            Bitmap frame = _cameraService.CaptureFrame();
+
+            if (frame == null)
+            {
+                MessageBox.Show("Failed to capture frame.");
+                return;
+            }
+
+            StopAndDisconnectSetupCamera();
+
+            _setupCapturedFrame?.Dispose();
+            _setupCapturedFrame = frame;
+
+            var old = picRoiImage.Image;
+            picRoiImage.Image = (Bitmap)_setupCapturedFrame.Clone();
+            AdjustRoiImageSize();
+            old?.Dispose();
+
+            _pendingRoiImageRect = Rectangle.Empty;
+            _previewRect = Rectangle.Empty;
+            panelRoiEditor.Visible = false;
+
+            picRoiImage.Invalidate();
+
+            MessageBox.Show("Frame captured. You can now draw ROIs on the frozen image.");
         }
         private void RecipeCard_Click(object sender, EventArgs e)
         {
@@ -1040,7 +1196,12 @@ namespace JinnoVision.User_Control
                 Location = new Point(175, 25),
                 Width = 220
             };
-
+            var txtComponent = new TextBox
+            {
+                Text = roi.ComponentName,
+                Location = new Point(175, 55),
+                Width = 220
+            };
             var cmbClass = new ComboBox
             {
                 Location = new Point(420, 25),
@@ -1055,14 +1216,14 @@ namespace JinnoVision.User_Control
             var lblSize = new Label
             {
                 Text = $"Size: {roi.Width} x {roi.Height}",
-                Location = new Point(175, 65),
+                Location = new Point(175, 85),
                 AutoSize = true
             };
 
             var lblPosition = new Label
             {
                 Text = $"Position: ({roi.X}, {roi.Y})",
-                Location = new Point(175, 90),
+                Location = new Point(175, 110),
                 AutoSize = true
             };
 
@@ -1093,6 +1254,7 @@ namespace JinnoVision.User_Control
             btnUpdate.Click += (s, e) =>
             {
                 roi.RoiName = txtName.Text.Trim();
+                roi.ComponentName = txtComponent.Text.Trim();
                 roi.Classification = cmbClass.SelectedItem?.ToString() ?? "PASS";
                 roi.TargetClassName = roi.Classification == "PASS" ? "OK" : "NG";
                 roi.ConfidenceThreshold = trkConfidence.Value;
@@ -1136,7 +1298,7 @@ namespace JinnoVision.User_Control
                 lblConfidence.Text = $"{trkConfidence.Value}%";
             };
 
-            UpdatePreviewImage(picPreview, new Rectangle(roi.X, roi.Y, roi.Width, roi.Height));
+            LoadRoiPreviewFromSavedImage(picPreview, roi);
 
             card.Controls.Add(picPreview);
             card.Controls.Add(txtName);
@@ -1147,7 +1309,8 @@ namespace JinnoVision.User_Control
             card.Controls.Add(lblConfidence); 
             card.Controls.Add(btnUpdate);
             card.Controls.Add(btnDiscard);
-            card.Controls.Add(btnDelete);
+            card.Controls.Add(btnDelete); 
+            card.Controls.Add(txtComponent);
 
             card.Click += (s, e) =>
             {
@@ -1188,7 +1351,7 @@ namespace JinnoVision.User_Control
             panelRoiEditor = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 260,
+                Height = 310,
                 BackColor = Color.White,
                 Padding = new Padding(20),
                 BorderStyle = BorderStyle.FixedSingle,
@@ -1219,6 +1382,20 @@ namespace JinnoVision.User_Control
                 Width = 280
             };
 
+            var lblComponentName = new Label
+            {
+                Text = "Component Name",
+                Location = new Point(200, 85),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
+
+            txtComponentName = new TextBox
+            {
+                Location = new Point(200, 110),
+                Width = 280
+            };
+
             var lblClass = new Label
             {
                 Text = "ROI Classification",
@@ -1241,15 +1418,15 @@ namespace JinnoVision.User_Control
             var lblConfidence = new Label
             {
                 Text = "Confidence Threshold",
-                Location = new Point(200, 90),
+                Location = new Point(500, 85),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold)
             };
 
             trkConfidence = new TrackBar
             {
-                Location = new Point(200, 115),
-                Width = 430,
+                Location = new Point(500, 110),
+                Width = 220,
                 Minimum = 0,
                 Maximum = 100,
                 Value = 85,
@@ -1259,7 +1436,7 @@ namespace JinnoVision.User_Control
             lblConfidenceValue = new Label
             {
                 Text = "85%",
-                Location = new Point(640, 120),
+                Location = new Point(730, 115),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 10, FontStyle.Bold)
             };
@@ -1272,14 +1449,14 @@ namespace JinnoVision.User_Control
             lblRoiPosition = new Label
             {
                 Text = "Position: -",
-                Location = new Point(200, 175),
+                Location = new Point(200, 170),
                 AutoSize = true
             };
 
             lblRoiSize = new Label
             {
                 Text = "Size: -",
-                Location = new Point(350, 175),
+                Location = new Point(350, 170),
                 AutoSize = true
             };
 
@@ -1288,7 +1465,7 @@ namespace JinnoVision.User_Control
                 Text = "Save ROI",
                 Width = 120,
                 Height = 35,
-                Location = new Point(500, 200),
+                Location = new Point(500, 220),
                 BackColor = Color.FromArgb(73, 105, 150),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
@@ -1299,7 +1476,7 @@ namespace JinnoVision.User_Control
                 Text = "Delete",
                 Width = 100,
                 Height = 35,
-                Location = new Point(630, 200),
+                Location = new Point(630, 220),
                 ForeColor = Color.Red,
                 FlatStyle = FlatStyle.Flat
             };
@@ -1307,6 +1484,10 @@ namespace JinnoVision.User_Control
             panelRoiEditor.Controls.Add(picRoiPreview);
             panelRoiEditor.Controls.Add(lblName);
             panelRoiEditor.Controls.Add(txtRoiName);
+
+            panelRoiEditor.Controls.Add(lblComponentName);
+            panelRoiEditor.Controls.Add(txtComponentName);
+
             panelRoiEditor.Controls.Add(lblClass);
             panelRoiEditor.Controls.Add(cmbRoiClass);
             panelRoiEditor.Controls.Add(lblConfidence);
@@ -1342,10 +1523,10 @@ namespace JinnoVision.User_Control
         {
             if (_pendingRoiImageRect.Width <= 0 || _pendingRoiImageRect.Height <= 0)
                 return;
-
             panelRoiEditor.Visible = true;
 
             txtRoiName.Text = $"ROI {GetCurrentStep().Rois.Count + 1}";
+            txtComponentName.Text = "";
             cmbRoiClass.SelectedIndex = 0;
             trkConfidence.Value = 85;
 
@@ -1354,22 +1535,23 @@ namespace JinnoVision.User_Control
 
             UpdateRoiPreview();
         }
-        private void ShowSavedRoiEditor(RoiInfoModel roi)
-        {
-            if (roi == null)
-                return;
+        //private void ShowSavedRoiEditor(RoiInfoModel roi)
+        //{
+        //    if (roi == null)
+        //        return;
 
-            panelRoiEditor.Visible = true;
+        //    panelRoiEditor.Visible = true;
 
-            txtRoiName.Text = roi.RoiName;
-            cmbRoiClass.SelectedIndex = roi.Classification == "FAIL" ? 1 : 0;
-            trkConfidence.Value = roi.ConfidenceThreshold;
+        //    txtRoiName.Text = roi.RoiName;
+        //    txtComponentName.Text = roi.ComponentName;
+        //    cmbRoiClass.SelectedIndex = roi.Classification == "FAIL" ? 1 : 0;
+        //    trkConfidence.Value = roi.ConfidenceThreshold;
 
-            lblRoiPosition.Text = $"Position: ({roi.X}, {roi.Y})";
-            lblRoiSize.Text = $"Size: {roi.Width} x {roi.Height}";
+        //    lblRoiPosition.Text = $"Position: ({roi.X}, {roi.Y})";
+        //    lblRoiSize.Text = $"Size: {roi.Width} x {roi.Height}";
 
-            UpdateRoiPreview(new Rectangle(roi.X, roi.Y, roi.Width, roi.Height));
-        }
+        //    UpdateRoiPreview(new Rectangle(roi.X, roi.Y, roi.Width, roi.Height));
+        //}
         private void UpdateRoiPreview()
         {
             if (picRoiImage.Image == null)
@@ -1390,6 +1572,24 @@ namespace JinnoVision.User_Control
             picRoiPreview.Image = crop;
 
             source.Dispose();
+        }
+        private void LoadRoiPreviewFromSavedImage(PictureBox target, RoiInfoModel roi)
+        {
+            if (!string.IsNullOrWhiteSpace(roi.ImagePath) && File.Exists(roi.ImagePath))
+            {
+                using (var bmp = new Bitmap(roi.ImagePath))
+                {
+                    target.Image?.Dispose();
+                    target.Image = new Bitmap(bmp);
+                }
+
+                return;
+            }
+
+            // fallback only if saved image does not exist
+            UpdatePreviewImage(
+                target,
+                new Rectangle(roi.X, roi.Y, roi.Width, roi.Height));
         }
         private void UpdateRoiPreview(Rectangle imageRect)
         {
@@ -1414,5 +1614,98 @@ namespace JinnoVision.User_Control
             }
         }
         #endregion
+        #region Camera
+        private async void StartSetupLiveCamera()
+        {
+            try
+            {
+                StopAndDisconnectSetupCamera();
+
+                _cameraService = new HikMvsCameraService();
+
+                bool opened = _cameraService.InitializeAndOpenFirstCamera();
+
+                if (!opened)
+                {
+                    MessageBox.Show("Camera not found.");
+                    return;
+                }
+
+                bool started = _cameraService.Start(picRoiImage.Handle);
+
+                if (!started)
+                {
+                    MessageBox.Show("Failed to start camera.");
+                    return;
+                }
+
+                await Task.Delay(500);
+
+                AdjustHeightFromFirstFrame();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+        }
+        private void StopAndDisconnectSetupCamera()
+        {
+            try
+            {
+                if (_cameraService != null)
+                {
+                    _cameraService.Stop();
+                    _cameraService.Close();
+                    _cameraService.Dispose();
+                    _cameraService = null;
+                }
+            }
+            catch
+            {
+                // ignore cleanup errors for setup page
+            }
+        }
+        private void AdjustHeightFromFirstFrame()
+        {
+            Bitmap frame = _cameraService?.CaptureFrame();
+
+            if (frame == null)
+                return;
+
+            float ratio = (float)frame.Height / frame.Width;
+
+            int newHeight = (int)(picRoiImage.Width * ratio);
+
+            int maxHeight = 500;
+            int minHeight = 300;
+
+            picRoiImage.Height = Math.Max(minHeight, Math.Min(newHeight, maxHeight));
+
+            frame.Dispose();
+        }
+        private void AdjustRoiImageSize()
+        {
+            if (picRoiImage.Image == null)
+                return;
+
+            var img = picRoiImage.Image;
+
+            float ratio = (float)img.Height / img.Width;
+
+            int newHeight = (int)(picRoiImage.Width * ratio);
+
+            int maxHeight = 500; // adjust if needed
+            int minHeight = 300;
+
+            picRoiImage.Height = Math.Max(minHeight, Math.Min(newHeight, maxHeight));
+        }
+        #endregion
+        private void SetupControl_Disposed(object sender, EventArgs e)
+        {
+            StopAndDisconnectSetupCamera();
+
+            _setupCapturedFrame?.Dispose();
+            _setupCapturedFrame = null;
+        }
     }
 }

@@ -15,7 +15,7 @@ namespace JinnoVision.Services.Camera
         private MyCamera _camera;
         private bool _isOpen;
         private bool _isGrabbing;
-
+        private IntPtr _displayHandle = IntPtr.Zero;
         // Keep a strong reference so GC does not collect the callback delegate.
         private MyCamera.cbOutputExdelegate _imageCallback;
 
@@ -68,12 +68,79 @@ namespace JinnoVision.Services.Camera
 
             return true;
         }
+        public Bitmap CaptureFrame()
+        {
+            if (!_isOpen || _camera == null)
+                return null;
 
+            bool wasGrabbing = _isGrabbing;
+
+            if (!wasGrabbing)
+            {
+                int startRet = _camera.MV_CC_StartGrabbing_NET();
+                if (startRet != MyCamera.MV_OK)
+                {
+                    MessageBox.Show($"Start grabbing failed: 0x{startRet:X}");
+                    return null;
+                }
+
+                _isGrabbing = true;
+            }
+
+            MyCamera.MVCC_INTVALUE payloadSize = new MyCamera.MVCC_INTVALUE();
+
+            int nRet = _camera.MV_CC_GetIntValue_NET("PayloadSize", ref payloadSize);
+            if (nRet != MyCamera.MV_OK)
+            {
+                MessageBox.Show($"Get PayloadSize failed: 0x{nRet:X}");
+                return null;
+            }
+
+            int bufferSize = (int)payloadSize.nCurValue;
+            byte[] buffer = new byte[bufferSize];
+
+            MyCamera.MV_FRAME_OUT_INFO_EX frameInfo = new MyCamera.MV_FRAME_OUT_INFO_EX();
+
+            GCHandle handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+
+            try
+            {
+                IntPtr pData = handle.AddrOfPinnedObject();
+
+                nRet = _camera.MV_CC_GetOneFrameTimeout_NET(
+                    pData,
+                    (uint)buffer.Length,
+                    ref frameInfo,
+                    3000
+                );
+
+                if (nRet != MyCamera.MV_OK)
+                {
+                    MessageBox.Show($"GetOneFrameTimeout failed: 0x{nRet:X}");
+                    return null;
+                }
+
+                if (frameInfo.enPixelType == MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerRG8)
+                {
+                    return BuildBitmapFromMono8(
+                        pData,
+                        frameInfo.nWidth,
+                        frameInfo.nHeight);
+                }
+
+                MessageBox.Show($"Unsupported pixel format: {frameInfo.enPixelType}");
+                return null;
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
         public bool Start(IntPtr displayHandle)
         {
             if (!_isOpen)
                 return false;
-
+            _displayHandle = displayHandle;
             int nRet = _camera.MV_CC_StartGrabbing_NET();
             if (nRet != MyCamera.MV_OK)
             {

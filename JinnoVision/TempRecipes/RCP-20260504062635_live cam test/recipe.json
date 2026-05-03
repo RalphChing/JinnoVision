@@ -1,0 +1,27 @@
+{
+  "RecipeId": "RCP-20260504062635",
+  "RecipeName": "live cam test",
+  "IsActive": false,
+  "Steps": [
+    {
+      "StepNo": 1,
+      "StepName": "Main Step",
+      "Rois": [
+        {
+          "RoiId": "ROI_001",
+          "RoiName": "L1",
+          "ComponentName": "Light",
+          "X": 1036,
+          "Y": 532,
+          "Width": 2108,
+          "Height": 1904,
+          "RoiType": null,
+          "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TempRecipes\\RCP-20260504062635_live cam test\\Step_001\\ROI_001_L1\\template.png",
+          "TargetClassName": "OK",
+          "Classification": "PASS",
+          "ConfidenceThreshold": 85
+        }
+      ]
+    }
+  ]
+}
