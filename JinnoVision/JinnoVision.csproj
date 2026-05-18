@@ -46,6 +46,9 @@
     <Reference Include="AForge.Video.DirectShow, Version=2.2.5.0, Culture=neutral, PublicKeyToken=61ea4348d43881b7, processorArchitecture=MSIL">
       <HintPath>..\packages\AForge.Video.DirectShow.2.2.5\lib\AForge.Video.DirectShow.dll</HintPath>
     </Reference>
+    <Reference Include="EasyModbus, Version=5.6.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\EasyModbusTCP.5.6.0\lib\net40\EasyModbus.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=10.0.0.7, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.10.0.7\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
     </Reference>
@@ -96,12 +99,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Forms\LoginForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\LoginForm.Designer.cs">
-      <DependentUpon>LoginForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="Forms\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -120,6 +117,8 @@
     <Compile Include="Services\Camera\CameraFrameEventArgs.cs" />
     <Compile Include="Services\Camera\HikMvsCameraService.cs" />
     <Compile Include="Services\Camera\ICameraService.cs" />
+    <Compile Include="Services\Cobot\ICobotService.cs" />
+    <Compile Include="Services\Cobot\JakaCobotService.cs" />
     <Compile Include="Services\Setup\RecipeStorageService.cs" />
     <Compile Include="Services\Vision\ClassificationModule.cs" />
     <Compile Include="Services\Vision\CodeReaderModule.cs" />
@@ -131,6 +130,12 @@
     </Compile>
     <Compile Include="User Control\FoldersControl.Designer.cs">
       <DependentUpon>FoldersControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="User Control\LoginControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="User Control\LoginControl.Designer.cs">
+      <DependentUpon>LoginControl.cs</DependentUpon>
     </Compile>
     <Compile Include="User Control\SettingsControl.cs">
       <SubType>UserControl</SubType>
@@ -162,6 +167,9 @@
     <Compile Include="User Control\DashboardControl.Designer.cs">
       <DependentUpon>DashboardControl.cs</DependentUpon>
     </Compile>
+    <EmbeddedResource Include="Forms\MainForm.resx">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

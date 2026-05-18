@@ -23,7 +23,7 @@ namespace JinnoVision
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            Application.Run(new LoginForm(authService));
+            Application.Run(new MainForm(authService));
         }
     }
 }

@@ -16,15 +16,26 @@ namespace JinnoVision.User_Control
         private Label lblStatus;
         private Button btnCaptureInspect;
 
-        private GroupBox grpVision;
-        private Button btnRunCodeRead;
-        private TextBox txtVisionResult;
         private GroupBox grpCapture;
         private PictureBox picCapture;
+
+        private System.Windows.Forms.Label lblCobotStatus;
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
-                components.Dispose();
+            if (disposing)
+            {
+                if (_cobotService != null)
+                {
+                    _cobotService.Dispose();
+                    _cobotService = null;
+                }
+
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+            }
 
             base.Dispose(disposing);
         }
@@ -40,15 +51,11 @@ namespace JinnoVision.User_Control
             this.btnCaptureInspect = new Button();
             this.lblStatus = new Label();
 
-            this.grpVision = new GroupBox();
-            this.btnRunCodeRead = new Button();
-            this.txtVisionResult = new TextBox();
             this.grpCapture = new GroupBox();
             this.picCapture = new PictureBox();
 
             this.grpCamera.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picCamera)).BeginInit();
-            this.grpVision.SuspendLayout();
             this.SuspendLayout();
 
             // ======================
@@ -96,6 +103,18 @@ namespace JinnoVision.User_Control
             this.picCamera.BackColor = Color.Black;
             this.picCamera.SizeMode = PictureBoxSizeMode.Zoom;
 
+            //cobot connection
+
+            this.lblCobotStatus = new System.Windows.Forms.Label();
+            this.lblCobotStatus.Location = new System.Drawing.Point(750, 25);
+            this.lblCobotStatus.Name = "lblCobotStatus";
+            this.lblCobotStatus.Size = new System.Drawing.Size(220, 35);
+            this.lblCobotStatus.Text = "Cobot Connecting...";
+            this.lblCobotStatus.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.lblCobotStatus.BackColor = System.Drawing.Color.Gray;
+            this.lblCobotStatus.ForeColor = System.Drawing.Color.White;
+
+
             this.grpCamera.Controls.Add(this.btnConnect);
             this.grpCamera.Controls.Add(this.btnStart);
             this.grpCamera.Controls.Add(this.btnStop);
@@ -103,6 +122,7 @@ namespace JinnoVision.User_Control
             this.grpCamera.Controls.Add(this.btnDisconnect);
             this.grpCamera.Controls.Add(this.lblStatus);
             this.grpCamera.Controls.Add(this.picCamera);
+            this.grpCamera.Controls.Add(this.lblCobotStatus);
             // ======================
             // grpCapture
             // ======================
@@ -118,43 +138,18 @@ namespace JinnoVision.User_Control
             this.picCapture.SizeMode = PictureBoxSizeMode.Zoom;
 
             this.grpCapture.Controls.Add(this.picCapture);
-            // ======================
-            // grpVision
-            // ======================
-            this.grpVision.Text = "Vision Test";
-            this.grpVision.Font = new Font("Segoe UI", 10F);
-            this.grpVision.Location = new Point(1530, 10);
-            this.grpVision.Size = new Size(350, 600);
-
-            // btnRunCodeRead
-            this.btnRunCodeRead.Text = "Run Code Read";
-            this.btnRunCodeRead.Location = new Point(20, 30);
-            this.btnRunCodeRead.Size = new Size(150, 35);
-
-            // txtVisionResult
-            this.txtVisionResult.Location = new Point(20, 80);
-            this.txtVisionResult.Size = new Size(300, 450);
-            this.txtVisionResult.Multiline = true;
-            this.txtVisionResult.ScrollBars = ScrollBars.Vertical;
-            this.txtVisionResult.Font = new Font("Consolas", 10F);
-
-            this.grpVision.Controls.Add(this.btnRunCodeRead);
-            this.grpVision.Controls.Add(this.txtVisionResult);
 
             // ======================
             // DashboardControl
             // ======================
             this.Controls.Add(this.grpCamera);
             this.Controls.Add(this.grpCapture);
-            this.Controls.Add(this.grpVision);
             this.Size = new Size(1900, 620);
             this.BackColor = Color.WhiteSmoke;
 
             this.grpCamera.ResumeLayout(false);
             this.grpCamera.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picCamera)).EndInit();
-            this.grpVision.ResumeLayout(false);
-            this.grpVision.PerformLayout();
             this.ResumeLayout(false);
         }
     }

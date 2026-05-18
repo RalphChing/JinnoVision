@@ -12,6 +12,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using EasyModbus;
 
 namespace JinnoVision.User_Control
 {
@@ -93,6 +94,7 @@ namespace JinnoVision.User_Control
             LoadRecipesToLeftPanel();
             LoadMostRecentRecipe();
             this.Disposed += SetupControl_Disposed;
+
         }
 
         private void WireEvents()
@@ -345,12 +347,12 @@ namespace JinnoVision.User_Control
                 AdjustRoiImageSize();
             };
             //test
-            //Bitmap testImage = new Bitmap(1000, 600);
-            //using (Graphics g = Graphics.FromImage(testImage))
-            //{
-            //    g.Clear(Color.DimGray);
-            //}
-            //picRoiImage.Image = testImage;
+            Bitmap testImage = new Bitmap(1000, 600);
+            using (Graphics g = Graphics.FromImage(testImage))
+            {
+                g.Clear(Color.DimGray);
+            }
+            picRoiImage.Image = testImage;
             //test
 
             picRoiImage.MouseDown += PicRoiImage_MouseDown;

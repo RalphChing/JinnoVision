@@ -1,17 +1,19 @@
-﻿using AForge.Video;
-using AForge.Video.DirectShow;
-using JinnoVision.App.Core;
+﻿using JinnoVision.App.Core;
 using JinnoVision.App.Models;
 using JinnoVision.App.Services;
 using JinnoVision.Models;
 using JinnoVision.Services;
 using JinnoVision.Services.Camera;
+using JinnoVision.Services.Cobot;
 using JinnoVision.Services.Setup;
 using JinnoVision.Services.Vision;
 using System;
+using System.Configuration;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace JinnoVision.User_Control
@@ -30,23 +32,31 @@ namespace JinnoVision.User_Control
         private Bitmap _latestFrame;
         private Bitmap _capturedFrame;
 
+        private ICobotService _cobotService;
+        private bool _robotInspectionRunning;
+        private bool _autoConnectStarted;
+
         public DashboardControl()
         {
             InitializeComponent();
 
+            _cobotService = new JakaCobotService();
+            _cobotService.CaptureRequested += CobotService_CaptureRequested;
+            this.HandleCreated += DashboardControl_HandleCreated;
             _codeReaderModule = new CodeReaderModule();
+
             InitializeInspection();
             LoadLatestRecipeForInspection();
-            picCapture.Paint += PicCapture_Paint;
-            //picCamera.Paint += PicCamera_Paint;
+            //AutoConnectCobotFromConfig();
 
-            btnRunCodeRead.Click += BtnRunCodeRead_Click;
-        
+            picCapture.Paint += PicCapture_Paint;
+
             btnConnect.Click += BtnConnect_Click;
             btnDisconnect.Click += BtnDisconnect_Click;
             btnStart.Click += BtnStart_Click;
             btnStop.Click += BtnStop_Click;
             this.Disposed += DashboardControl_Disposed;
+            
             btnCaptureInspect.Click += BtnCaptureInspect_Click;
         }
 
@@ -111,16 +121,6 @@ namespace JinnoVision.User_Control
 
                 CodeReadResult result = _codeReaderModule.Run(ofd.FileName);
 
-                if (result.Success)
-                {
-                    txtVisionResult.Text =
-                        $"Type: {result.CodeType}{Environment.NewLine}" +
-                        $"Text: {result.CodeText}";
-                }
-                else
-                {
-                    txtVisionResult.Text = $"Failed: {result.ErrorMessage}";
-                }
             }
         }
         private void BtnCaptureInspect_Click(object sender, EventArgs e)
@@ -151,6 +151,111 @@ namespace JinnoVision.User_Control
 
             lblStatus.Text = "Captured + inspected";
         }
+        private void DashboardControl_HandleCreated(object sender, EventArgs e)
+        {
+            if (_autoConnectStarted)
+                return;
+
+            _autoConnectStarted = true;
+            AutoConnectCobotFromConfig();
+        }
+        private async void CobotService_CaptureRequested()
+        {
+            if (_robotInspectionRunning)
+                return;
+
+            _robotInspectionRunning = true;
+
+            try
+            {
+                SafeUi(() =>
+                {
+                    lblCobotStatus.Text = "Robot Triggered";
+                    lblCobotStatus.BackColor = Color.Orange;
+                });
+
+                _cobotService.SetBusy();
+
+                await Task.Delay(50);
+
+                Bitmap frame = null;
+
+                // Capture on UI thread
+                BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        frame = _cameraService.CaptureFrame();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Capture failed: " + ex.Message);
+                    }
+                }));
+
+                await Task.Delay(100);
+
+                if (frame == null)
+                {
+                    _cobotService.SetFail();
+
+                    BeginInvoke(new Action(() =>
+                    {
+                        lblCobotStatus.Text = "Capture Failed";
+                        lblCobotStatus.BackColor = Color.Red;
+                    }));
+
+                    return;
+                }
+
+                Debug.WriteLine($"Captured at {DateTime.Now:HH:mm:ss.fff}");
+
+                // Display captured frame
+                BeginInvoke(new Action(() =>
+                {
+                    if (picCapture.Image != null)
+                    {
+                        picCapture.Image.Dispose();
+                        picCapture.Image = null;
+                    }
+
+                    picCapture.Image = (Bitmap)frame.Clone();
+                }));
+
+                // TEMPORARY:
+                // For now always PASS until inspection logic is connected
+                _cobotService.SetPass();
+
+                SafeUi(() =>
+                {
+                    lblCobotStatus.Text = "Inspection PASS";
+                    lblCobotStatus.BackColor = Color.LimeGreen;
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+
+                _cobotService.SetFail();
+
+                BeginInvoke(new Action(() =>
+                {
+                    lblCobotStatus.Text = "Inspection ERROR";
+                    lblCobotStatus.BackColor = Color.Red;
+
+                    MessageBox.Show(
+                        "Robot inspection failed:\n\n" + ex.Message,
+                        "Robot Inspection",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }));
+            }
+            finally
+            {
+                _robotInspectionRunning = false;
+            }
+        }
+
         private void CameraService_FrameReceived(object sender, CameraFrameEventArgs e)
         {
             if (picCamera.InvokeRequired)
@@ -226,25 +331,7 @@ namespace JinnoVision.User_Control
         }
         private void RunLiveInspection(Bitmap frame)
         {
-            if (_inspectionEngine == null)
-            {
-                txtVisionResult.Text = "Inspection engine is null.";
-                return;
-            }
-
-            if (_currentRecipe == null)
-            {
-                txtVisionResult.Text = "No recipe loaded.";
-                return;
-            }
-
             var step = _currentRecipe.Steps.FirstOrDefault();
-
-            if (step == null || step.Rois.Count == 0)
-            {
-                txtVisionResult.Text = "Recipe has no ROIs.";
-                return;
-            }
 
             var rois = step.Rois.Select(r => new RecipeRoi
             {
@@ -259,12 +346,6 @@ namespace JinnoVision.User_Control
 
             _lastInspectionResults = _inspectionEngine.InspectFrame(frame, rois);
 
-            txtVisionResult.Text = string.Join(
-                Environment.NewLine,
-                _lastInspectionResults.Select(r =>
-                    $"{r.RoiName}: {r.FinalResult} | Expected: {r.ExpectedComponent} | Predicted: {r.PredictedComponent}/{r.PredictedStatus} | {r.Confidence:P1}"
-                )
-            );
         }
 
         private void InitializeInspection()
@@ -276,20 +357,17 @@ namespace JinnoVision.User_Control
             }
             catch (Exception ex)
             {
-                txtVisionResult.Text =
-                    "AI model not loaded yet. Retrain model first.\r\n" + ex.Message;
+                MessageBox.Show(
+                    "AI model not loaded yet. Retrain model first.\r\n" + ex.Message,
+                    "Initialization Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
         private void LoadLatestRecipeForInspection()
         {
             _currentRecipe = _recipeStorageService.LoadMostRecentRecipe();
-
-            if (_currentRecipe != null)
-            {
-                txtVisionResult.Text =
-                    $"Loaded recipe: {_currentRecipe.RecipeName}";
-            }
         }
         private Color GetResultColor(string result)
         {
@@ -369,6 +447,58 @@ namespace JinnoVision.User_Control
 
             return new Rectangle(x, y, w, h);
         }
+        private void AutoConnectCobotFromConfig()
+        {
+            bool autoConnect = false;
+
+            bool.TryParse(
+                ConfigurationManager.AppSettings["AutoConnectJakaCobot"],
+                out autoConnect);
+
+            if (!autoConnect)
+            {
+                lblCobotStatus.Text = "JAKA Auto Connect Disabled";
+                lblCobotStatus.BackColor = Color.Gray;
+                return;
+            }
+
+            string ip =
+                ConfigurationManager.AppSettings["JakaCobotIp"];
+
+            int port = 502;
+
+            int.TryParse(
+                ConfigurationManager.AppSettings["JakaCobotPort"],
+                out port);
+
+            if (string.IsNullOrWhiteSpace(ip))
+            {
+                lblCobotStatus.Text = "JAKA IP Missing";
+                lblCobotStatus.BackColor = Color.Red;
+                return;
+            }
+
+            try
+            {
+                _cobotService.Connect(ip, port);
+
+                _cobotService.StartListening();
+
+                lblCobotStatus.Text = "JAKA Connected";
+                lblCobotStatus.BackColor = Color.LimeGreen;
+            }
+            catch (Exception ex)
+            {
+                lblCobotStatus.Text = "JAKA Connection Failed";
+                lblCobotStatus.BackColor = Color.Red;
+
+                MessageBox.Show(
+                    "Failed to connect to JAKA cobot.\n\n" + ex.Message,
+                    "JAKA Connection",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
         private void DashboardControl_Disposed(object sender, EventArgs e)
         {
             if (_cameraService != null)
@@ -377,6 +507,19 @@ namespace JinnoVision.User_Control
                 _cameraService.Dispose();
                 _cameraService = null;
             }
+        }
+        private void SafeUi(Action action)
+        {
+            if (IsDisposed || Disposing)
+                return;
+
+            if (!IsHandleCreated)
+                return;
+
+            if (InvokeRequired)
+                BeginInvoke(action);
+            else
+                action();
         }
     }
 }

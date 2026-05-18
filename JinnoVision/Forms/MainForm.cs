@@ -1,24 +1,49 @@
-﻿using System;
+﻿using JinnoVision.App.Interfaces;
+using JinnoVision.App.Models;
+using JinnoVision.App.Services;
+using JinnoVision.User_Control; // your UserControls namespace
+using System;
 using System.Drawing;
 using System.Windows.Forms;
-using JinnoVision.App.Models;
-using JinnoVision.User_Control; // your UserControls namespace
 
 namespace JinnoVision.Forms
 {
     public partial class MainForm : Form
     {
+        private readonly IAuthService _authService;
         private Button _activeButton;
+        private AuthenticatedUser _currentUser;
 
-        public MainForm(AuthenticatedUser currentUser)
+        public MainForm(IAuthService authService)
         {
-            this.Text = $"Main - {currentUser.Username} ({currentUser.Role})";
+            _authService = authService;
             InitializeComponent();
 
             InitializeMenuButtons();
             WireHeaderEvents();
+            ShowLoggedOutState();
         }
 
+        private void ShowLoggedOutState()
+        {
+            panelHeader.Visible = false;
+
+            var login = new LoginControl(_authService);
+            login.LoginSucceeded += Login_LoginSucceeded;
+
+            LoadPage(login);
+        }
+        private void Login_LoginSucceeded(object sender, AuthenticatedUser user)
+        {
+            _currentUser = user;
+
+            panelHeader.Visible = true;
+            btnRolePill.Text = user.Role ?? "USER";
+            lblAppNameRight.Text = "JINNO";
+
+            SetActive(btnDashboard);
+            LoadPage(new DashboardControl());
+        }
         private void InitializeMenuButtons()
         {
             ConfigureMenuButton(btnDashboard, "Dashboard");

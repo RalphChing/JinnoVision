@@ -73,7 +73,7 @@ class ComponentPassFailDataset(Dataset):
         return image, label
 
 def main():
-    print("=== JinnoVision Real Trainer ===")
+    print("=== JinnoVision Trainer ===")
     print("Training data:", TRAINING_DATA)
 
     if not TRAINING_DATA.exists():
