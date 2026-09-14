@@ -10,19 +10,26 @@ namespace JinnoVision.Services.Cobot
         private ModbusClient _modbus;
         private Timer _pollTimer;
 
-        private bool _lastCaptureRequest;
-        private bool _isProcessingTrigger;
+        private bool _lastProgramStartRequest;
+        private bool _lastNextStepRequest;
 
-        public event Action CaptureRequested;
+        private bool _isProcessingProgramStart;
+        private bool _isProcessingNextStep;
+
+        public event Action ProgramStartRequested;
+        public event Action NextStepRequested;
 
         public bool IsConnected =>
             _modbus != null && _modbus.Connected;
 
-        // Coil mapping
-        private const int TriggerInput = 12; // Robot -> PC
-        private const int CoilBusy = 1;           // PC -> Robot
-        private const int CoilPass = 2;           // PC -> Robot
-        private const int CoilFail = 3;           // PC -> Robot
+        // Robot -> PC discrete inputs
+        private const int ProgramStartInput = 8;
+        private const int NextStepInput = 9;
+
+        // PC -> Robot coils
+        private const int CoilBusy = 1;
+        private const int CoilPass = 2;
+        private const int CoilFail = 3;
 
         public void Connect(string ip, int port)
         {
@@ -64,32 +71,46 @@ namespace JinnoVision.Services.Cobot
         {
             try
             {
-                bool[] inputs = _modbus.ReadDiscreteInputs(TriggerInput, 1);
+                bool programStart = ReadInput(ProgramStartInput);
+                bool nextStep = ReadInput(NextStepInput);
 
-                bool captureRequest = inputs[0];
-
-                if (captureRequest && !_lastCaptureRequest && !_isProcessingTrigger)
+                if (programStart && !_lastProgramStartRequest && !_isProcessingProgramStart)
                 {
-                    _isProcessingTrigger = true;
+                    _isProcessingProgramStart = true;
 
-                    System.Diagnostics.Debug.WriteLine("Robot trigger received");
+                    Debug.WriteLine("JAKA Program Start signal received");
 
-                    CaptureRequested?.Invoke();
+                    ProgramStartRequested?.Invoke();
                 }
 
-                _lastCaptureRequest = captureRequest;
-
-                // Allow next trigger after robot clears signal
-                if (!captureRequest)
+                if (nextStep && !_lastNextStepRequest && !_isProcessingNextStep)
                 {
-                    _isProcessingTrigger = false;
+                    _isProcessingNextStep = true;
+
+                    Debug.WriteLine("JAKA Next Step signal received");
+
+                    NextStepRequested?.Invoke();
                 }
+
+                _lastProgramStartRequest = programStart;
+                _lastNextStepRequest = nextStep;
+
+                if (!programStart)
+                    _isProcessingProgramStart = false;
+
+                if (!nextStep)
+                    _isProcessingNextStep = false;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    "JAKA polling failed: " + ex.Message);
+                Debug.WriteLine("JAKA polling failed: " + ex.Message);
             }
+        }
+
+        private bool ReadInput(int inputAddress)
+        {
+            bool[] inputs = _modbus.ReadDiscreteInputs(inputAddress, 1);
+            return inputs.Length > 0 && inputs[0];
         }
 
         public void SetBusy()

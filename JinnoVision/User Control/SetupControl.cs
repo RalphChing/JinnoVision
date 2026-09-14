@@ -39,7 +39,7 @@ namespace JinnoVision.User_Control
         private TextBox txtComponentName;
         private TextBox txtRecipeName;
         private Label lblRecipeId;
-
+        private Panel panelStepSection;
         private RecipeModel _currentRecipe;
         private InspectionStepModel _selectedStep;
 
@@ -100,7 +100,7 @@ namespace JinnoVision.User_Control
         private void WireEvents()
         {
             btnNewRecipe.Click += BtnNewRecipe_Click;
-            //btnAddStep.Click += BtnAddStep_Click;
+            btnAddStep.Click += BtnAddStep_Click;
             btnAddRoi.Click += BtnAddRoi_Click;
             btnSaveRoi.Click += BtnSaveRoi_Click;
             btnSaveRecipe.Click += BtnSaveRecipe_Click;
@@ -137,9 +137,9 @@ namespace JinnoVision.User_Control
         {
             parent.Controls.Clear();
 
-            BuildContent(parent);
             BuildHeader(parent);
-            BuildTabs(parent);
+            BuildContent(parent);
+            //BuildTabs(parent);
         }
         private void BuildTabs(Panel parent)
         {
@@ -205,14 +205,14 @@ namespace JinnoVision.User_Control
             txtRecipeName = new TextBox
             {
                 Location = new Point(20, 40),
-                Width = 500,
+                Width = 200,
                 Height = 30
             };
 
             lblRecipeId = new Label
             {
                 Text = "Recipe ID",
-                Location = new Point(550, 43),
+                Location = new Point(250, 43),
                 AutoSize = true
             };
 
@@ -241,21 +241,41 @@ namespace JinnoVision.User_Control
                 btnSaveRecipe.Left - btnRetrainModel.Width - 10,
                 btnSaveRecipe.Top
             );
+
+            btnAddStep = new Button
+            {
+                Text = "Add Step",
+                Width = 140,
+                Height = 38,
+                BackColor = Color.FromArgb(46, 160, 67),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
+            btnAddStep.Location = new Point(
+                btnRetrainModel.Left - btnAddStep.Width - 10,
+                btnRetrainModel.Top
+            );
+
             panelHeader.Resize += (s, e) =>
             {
                 btnSaveRecipe.Left = panelHeader.Width - btnSaveRecipe.Width - 20;
 
                 btnRetrainModel.Left = btnSaveRecipe.Left - btnRetrainModel.Width - 10;
                 btnRetrainModel.Top = btnSaveRecipe.Top;
+
+                btnAddStep.Left = btnRetrainModel.Left - btnAddStep.Width - 10;
+                btnAddStep.Top = btnRetrainModel.Top;
             };
+
             panelHeader.Controls.Add(lblName);
             panelHeader.Controls.Add(txtRecipeName);
             panelHeader.Controls.Add(lblRecipeId);
             panelHeader.Controls.Add(btnSaveRecipe);
             panelHeader.Controls.Add(btnRetrainModel);
+            panelHeader.Controls.Add(btnAddStep);
 
             parent.Controls.Add(panelHeader);
-            panelHeader.BringToFront();
         }
 
         private void BuildContent(Panel parent)
@@ -263,8 +283,9 @@ namespace JinnoVision.User_Control
             panelContent = new Panel
             {
                 Dock = DockStyle.Fill,
+                Height = 190,
                 BackColor = Color.White,
-                Padding = new Padding(20),
+                Padding = new Padding(30),
                 AutoScroll = true
             };
 
@@ -277,16 +298,35 @@ namespace JinnoVision.User_Control
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            panelSteps = new FlowLayoutPanel
+            panelStepSection = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 110,
-                BackColor = Color.White, //Color.FromArgb(240, 246, 252), temporary color
-                Padding = new Padding(10),
+                Height = 190,
+                BackColor = Color.White,
+                Padding = new Padding(15, 10, 15, 15)
+            };
+
+            var lblStepsTitle = new Label
+            {
+                Text = "Steps",
+                Dock = DockStyle.Top,
+                Height = 30,
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            panelSteps = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Padding = new Padding(0, 10, 0, 0),
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
                 AutoScroll = true
             };
+
+            panelStepSection.Controls.Add(panelSteps);
+            panelStepSection.Controls.Add(lblStepsTitle);
 
             Panel roiHeader = new Panel
             {
@@ -339,6 +379,7 @@ namespace JinnoVision.User_Control
             picRoiImage = new PictureBox
             {
                 Dock = DockStyle.Top,
+                Height = 500,
                 BackColor = Color.Black,
                 SizeMode = PictureBoxSizeMode.Zoom
             };
@@ -373,12 +414,12 @@ namespace JinnoVision.User_Control
 
             BuildRoiEditor();
 
-            panelContent.Controls.Add(panelRois);     // Fill
+            panelContent.Controls.Add(panelRois);
             panelContent.Controls.Add(panelRoiEditor);
-            panelContent.Controls.Add(roiHeader);     // Top
+            panelContent.Controls.Add(roiHeader);
             panelContent.Controls.Add(picRoiImage);
-            panelContent.Controls.Add(panelSteps);    // Top
-            panelContent.Controls.Add(lblMainTitle);  // Top
+            panelContent.Controls.Add(panelStepSection);
+            panelContent.Controls.Add(lblMainTitle);
 
             parent.Controls.Add(panelContent);
         }
@@ -434,6 +475,8 @@ namespace JinnoVision.User_Control
         #region Click Handlers
         private void BtnNewRecipe_Click(object sender, EventArgs e)
         {
+            StopAndDisconnectSetupCamera();
+
             _currentRecipe = new RecipeModel
             {
                 RecipeId = GenerateRecipeId(),
@@ -444,7 +487,7 @@ namespace JinnoVision.User_Control
             var step = new InspectionStepModel
             {
                 StepNo = 1,
-                StepName = "Main Step"
+                StepName = "Step 1"
             };
 
             _currentRecipe.Steps.Add(step);
@@ -455,6 +498,10 @@ namespace JinnoVision.User_Control
 
             panelSteps.Controls.Clear();
             panelRois.Controls.Clear();
+            panelRoiEditor.Visible = false;
+
+            AddStepCard(step);
+            HighlightSelectedStep();
 
             _recipes.Add(_currentRecipe);
             LoadRecipesToLeftPanel();
@@ -465,7 +512,10 @@ namespace JinnoVision.User_Control
         private void BtnAddStep_Click(object sender, EventArgs e)
         {
             if (_currentRecipe == null)
+            {
+                MessageBox.Show("Please create or select a recipe first.");
                 return;
+            }
 
             var step = new InspectionStepModel
             {
@@ -477,7 +527,13 @@ namespace JinnoVision.User_Control
             _selectedStep = step;
 
             AddStepCard(step);
+            HighlightSelectedStep();
             LoadRois();
+
+            _pendingRoiImageRect = Rectangle.Empty;
+            _previewRect = Rectangle.Empty;
+            panelRoiEditor.Visible = false;
+            picRoiImage.Invalidate();
         }
 
         private void BtnAddRoi_Click(object sender, EventArgs e)
@@ -698,7 +754,14 @@ namespace JinnoVision.User_Control
 
             _selectedStep = card.Tag as InspectionStepModel;
 
+            HighlightSelectedStep();
             LoadRois();
+
+            _pendingRoiImageRect = Rectangle.Empty;
+            _previewRect = Rectangle.Empty;
+            panelRoiEditor.Visible = false;
+
+            picRoiImage.Invalidate();
         }
         #endregion
         #region Helper Methods
@@ -711,36 +774,74 @@ namespace JinnoVision.User_Control
         {
             var card = new Panel
             {
-                Width = 150,
-                Height = 70,
-                Margin = new Padding(0, 0, 10, 0),
+                Width = 280,
+                Height = 90,
+                Margin = new Padding(0, 0, 20, 0),
                 BackColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle,
                 Tag = step
             };
 
-            var lblStep = new Label
+            var lblNumber = new Label
+            {
+                Text = step.StepNo.ToString(),
+                Location = new Point(15, 15),
+                Size = new Size(38, 38),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.FromArgb(73, 105, 150),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+            };
+
+            var txtStepName = new TextBox
             {
                 Text = step.StepName,
-                Dock = DockStyle.Top,
-                Height = 35,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Location = new Point(70, 15),
+                Width = 190,
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                BorderStyle = BorderStyle.None,
+                BackColor = Color.White
             };
 
             var lblRoiCount = new Label
             {
-                Text = $"{step.Rois.Count} ROIs",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.Gray
+                Text = $"ROIs: {step.Rois.Count}",
+                Location = new Point(70, 55),
+                AutoSize = true,
+                ForeColor = Color.DimGray
             };
 
+            var btnSave = new Button
+            {
+                Text = "Save",
+                Width = 60,
+                Height = 28,
+                Location = new Point(200, 50),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(73, 105, 150),
+                ForeColor = Color.White
+            };
+
+            btnSave.Click += (s, e) =>
+            {
+                step.StepName = txtStepName.Text.Trim();
+
+                if (string.IsNullOrWhiteSpace(step.StepName))
+                {
+                    step.StepName = $"Step {step.StepNo}";
+                    txtStepName.Text = step.StepName;
+                }
+
+                MessageBox.Show("Step updated.");
+            };
+
+            card.Controls.Add(lblNumber);
+            card.Controls.Add(txtStepName);
             card.Controls.Add(lblRoiCount);
-            card.Controls.Add(lblStep);
+            card.Controls.Add(btnSave);
 
             card.Click += StepCard_Click;
-            lblStep.Click += StepCard_Click;
+            lblNumber.Click += StepCard_Click;
             lblRoiCount.Click += StepCard_Click;
 
             panelSteps.Controls.Add(card);
@@ -750,32 +851,47 @@ namespace JinnoVision.User_Control
         {
             panelRois.Controls.Clear();
             panelRoiEditor.Visible = false;
-            if (_currentRecipe == null || !_currentRecipe.Steps.Any())
+
+            if (_currentRecipe == null || _selectedStep == null)
                 return;
 
-            var step = _currentRecipe.Steps.First();
-
-            foreach (var roi in step.Rois)
+            foreach (var roi in _selectedStep.Rois)
             {
                 AddRoiEditorCard(roi, insertAtTop: false);
             }
+
+            picRoiImage.Invalidate();
         }
 
         private void LoadRecipe(RecipeModel recipe)
         {
+            StopAndDisconnectSetupCamera();
+
             _currentRecipe = recipe;
 
             txtRecipeName.Text = recipe.RecipeName;
             lblRecipeId.Text = recipe.RecipeId;
 
-            panelSteps.Controls.Clear(); 
+            panelSteps.Controls.Clear();
             panelRois.Controls.Clear();
+            panelRoiEditor.Visible = false;
+
+            foreach (var step in recipe.Steps)
+            {
+                AddStepCard(step);
+            }
 
             if (recipe.Steps.Any())
             {
                 _selectedStep = recipe.Steps.First();
+                HighlightSelectedStep();
                 LoadRois();
             }
+
+            _pendingRoiImageRect = Rectangle.Empty;
+            _previewRect = Rectangle.Empty;
+
+            picRoiImage.Invalidate();
         }
 
         private void LoadRecipesToLeftPanel()
@@ -839,16 +955,38 @@ namespace JinnoVision.User_Control
             if (_currentRecipe == null)
                 return null;
 
+            if (_selectedStep != null)
+                return _selectedStep;
+
             if (!_currentRecipe.Steps.Any())
             {
-                _currentRecipe.Steps.Add(new InspectionStepModel
+                var step = new InspectionStepModel
                 {
                     StepNo = 1,
-                    StepName = "Main Step"
-                });
+                    StepName = "Step 1"
+                };
+
+                _currentRecipe.Steps.Add(step);
+                _selectedStep = step;
+            }
+            else
+            {
+                _selectedStep = _currentRecipe.Steps.First();
             }
 
-            return _currentRecipe.Steps.First();
+            return _selectedStep;
+        }
+        private void HighlightSelectedStep()
+        {
+            foreach (Control ctrl in panelSteps.Controls)
+            {
+                if (ctrl is Panel p && p.Tag is InspectionStepModel step)
+                {
+                    p.BackColor = step == _selectedStep
+                        ? Color.FromArgb(220, 235, 255)
+                        : Color.White;
+                }
+            }
         }
         #endregion
         #region ROI Drawing Handlers
@@ -983,7 +1121,10 @@ namespace JinnoVision.User_Control
 
             if (_currentRecipe != null && _currentRecipe.Steps.Any())
             {
-                var step = _currentRecipe.Steps.First();
+                var step = GetCurrentStep();
+
+                if (step == null)
+                    return;
 
                 foreach (var roi in step.Rois)
                 {

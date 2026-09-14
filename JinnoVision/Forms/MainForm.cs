@@ -13,7 +13,7 @@ namespace JinnoVision.Forms
         private readonly IAuthService _authService;
         private Button _activeButton;
         private AuthenticatedUser _currentUser;
-
+        private DashboardControl _dashboardControl;
         public MainForm(IAuthService authService)
         {
             _authService = authService;
@@ -42,7 +42,7 @@ namespace JinnoVision.Forms
             lblAppNameRight.Text = "JINNO";
 
             SetActive(btnDashboard);
-            LoadPage(new DashboardControl());
+            LoadPage(GetDashboardControl());
         }
         private void InitializeMenuButtons()
         {
@@ -57,7 +57,7 @@ namespace JinnoVision.Forms
             btnDashboard.Click += (s, e) =>
             {
                 SetActive(btnDashboard);
-                LoadPage(new DashboardControl());
+                LoadPage(GetDashboardControl());
             };
 
             btnReview.Click += (s, e) =>
@@ -89,10 +89,6 @@ namespace JinnoVision.Forms
                 SetActive(btnFolders);
                 LoadPage(new FoldersControl());
             };
-
-            // Default selection
-            SetActive(btnDashboard);
-            LoadPage(new DashboardControl());
         }
 
         private void ConfigureMenuButton(Button btn, string text)
@@ -141,6 +137,13 @@ namespace JinnoVision.Forms
             };
 
             // If you want the role pill to be non-clickable, leave it as is.
+        }
+        private DashboardControl GetDashboardControl()
+        {
+            if (_dashboardControl == null || _dashboardControl.IsDisposed)
+                _dashboardControl = new DashboardControl();
+
+            return _dashboardControl;
         }
     }
 }

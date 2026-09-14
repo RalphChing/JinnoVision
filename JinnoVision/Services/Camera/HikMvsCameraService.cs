@@ -120,12 +120,19 @@ namespace JinnoVision.Services.Camera
                     return null;
                 }
 
-                if (frameInfo.enPixelType == MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerRG8)
+                if (frameInfo.enPixelType == MyCamera.MvGvspPixelType.PixelType_Gvsp_Mono8)
                 {
                     return BuildBitmapFromMono8(
                         pData,
                         frameInfo.nWidth,
                         frameInfo.nHeight);
+                }
+
+                if (frameInfo.enPixelType == MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerRG8)
+                {
+                    return ConvertToRgbBitmap(
+                        pData,
+                        frameInfo);
                 }
 
                 MessageBox.Show($"Unsupported pixel format: {frameInfo.enPixelType}");
@@ -278,7 +285,94 @@ namespace JinnoVision.Services.Camera
 
             return bmp;
         }
+        private Bitmap ConvertToRgbBitmap(
+    IntPtr pData,
+    MyCamera.MV_FRAME_OUT_INFO_EX frameInfo)
+        {
+            ushort width = frameInfo.nWidth;
+            ushort height = frameInfo.nHeight;
 
+            int rgbBufferSize = width * height * 3;
+            byte[] rgbBuffer = new byte[rgbBufferSize];
+
+            GCHandle rgbHandle = GCHandle.Alloc(rgbBuffer, GCHandleType.Pinned);
+
+            try
+            {
+                MyCamera.MV_PIXEL_CONVERT_PARAM convertParam =
+                    new MyCamera.MV_PIXEL_CONVERT_PARAM();
+
+                convertParam.nWidth = width;
+                convertParam.nHeight = height;
+                convertParam.pSrcData = pData;
+                convertParam.nSrcDataLen = frameInfo.nFrameLen;
+                convertParam.enSrcPixelType = frameInfo.enPixelType;
+
+                convertParam.pDstBuffer = rgbHandle.AddrOfPinnedObject();
+                convertParam.nDstBufferSize = (uint)rgbBufferSize;
+                convertParam.enDstPixelType =
+                    MyCamera.MvGvspPixelType.PixelType_Gvsp_RGB8_Packed;
+
+                int ret = _camera.MV_CC_ConvertPixelType_NET(ref convertParam);
+
+                if (ret != MyCamera.MV_OK)
+                {
+                    MessageBox.Show($"ConvertPixelType failed: 0x{ret:X}");
+                    return null;
+                }
+
+                return BuildBitmapFromRgb24(
+                    rgbHandle.AddrOfPinnedObject(),
+                    width,
+                    height);
+            }
+            finally
+            {
+                rgbHandle.Free();
+            }
+        }
+        private static Bitmap BuildBitmapFromRgb24(
+    IntPtr pRgbData,
+    int width,
+    int height)
+        {
+            Bitmap bmp = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+
+            Rectangle rect = new Rectangle(0, 0, width, height);
+            BitmapData bmpData = bmp.LockBits(
+                rect,
+                ImageLockMode.WriteOnly,
+                bmp.PixelFormat);
+
+            try
+            {
+                int srcStride = width * 3;
+                int dstStride = bmpData.Stride;
+
+                byte[] src = new byte[srcStride * height];
+                Marshal.Copy(pRgbData, src, 0, src.Length);
+
+                byte[] dst = new byte[dstStride * height];
+
+                for (int y = 0; y < height; y++)
+                {
+                    Buffer.BlockCopy(
+                        src,
+                        y * srcStride,
+                        dst,
+                        y * dstStride,
+                        srcStride);
+                }
+
+                Marshal.Copy(dst, 0, bmpData.Scan0, dst.Length);
+            }
+            finally
+            {
+                bmp.UnlockBits(bmpData);
+            }
+
+            return bmp;
+        }
         public void Dispose()
         {
             Close();

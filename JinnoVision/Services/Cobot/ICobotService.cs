@@ -4,7 +4,8 @@ namespace JinnoVision.Services.Cobot
 {
     public interface ICobotService : IDisposable
     {
-        event Action CaptureRequested;
+        event Action ProgramStartRequested;
+        event Action NextStepRequested;
 
         bool IsConnected { get; }
 

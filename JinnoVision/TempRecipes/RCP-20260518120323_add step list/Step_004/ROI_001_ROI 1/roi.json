@@ -1,0 +1,14 @@
+{
+  "RoiId": "ROI_001",
+  "RoiName": "ROI 1",
+  "ComponentName": "steproitest",
+  "X": 92,
+  "Y": 97,
+  "Width": 434,
+  "Height": 308,
+  "RoiType": null,
+  "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\steproitest\\Pass\\ROI_001_20260518_145126924.png",
+  "TargetClassName": "OK",
+  "Classification": "PASS",
+  "ConfidenceThreshold": 85
+}

@@ -5,13 +5,15 @@ using JinnoVision.Models;
 using JinnoVision.Services;
 using JinnoVision.Services.Camera;
 using JinnoVision.Services.Cobot;
+using JinnoVision.Services.Plc;
 using JinnoVision.Services.Setup;
 using JinnoVision.Services.Vision;
 using System;
-using System.Configuration;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -32,25 +34,50 @@ namespace JinnoVision.User_Control
         private Bitmap _latestFrame;
         private Bitmap _capturedFrame;
 
+        private IPlcService _plcService;
         private ICobotService _cobotService;
         private bool _robotInspectionRunning;
         private bool _autoConnectStarted;
+
+        private RecipeModel _selectedRecipe;
+        private int _currentStepIndex = -1;
+
+        private ComboBox cboRecipes;
+        private Button btnLoadRecipe;
+        private Label lblLoadedRecipe;
+        private Label lblCurrentStep;
+        private FlowLayoutPanel panelInspectionResults;
+
+        private string _currentRunFolder;
+        private int _captureSequence;
 
         public DashboardControl()
         {
             InitializeComponent();
 
-            _cobotService = new JakaCobotService();
-            _cobotService.CaptureRequested += CobotService_CaptureRequested;
             this.HandleCreated += DashboardControl_HandleCreated;
             _codeReaderModule = new CodeReaderModule();
 
             InitializeInspection();
-            LoadLatestRecipeForInspection();
-            //AutoConnectCobotFromConfig();
+            //LoadLatestRecipeForInspection();
+            //AutoConnectCamera();
+            bool usePlc = bool.Parse(ConfigurationManager.AppSettings["UsePlc"] ?? "false");
 
+            if (usePlc)
+            {
+                InitializePlc();
+                AutoConnectPlc();
+            }
+            else
+            {
+                InitializeCobot();
+                AutoConnectCobotFromConfig();
+            }
+
+            LoadRecipeDropdown();
+
+            btnLoadRecipe.Click += BtnLoadRecipe_Click;
             picCapture.Paint += PicCapture_Paint;
-
             btnConnect.Click += BtnConnect_Click;
             btnDisconnect.Click += BtnDisconnect_Click;
             btnStart.Click += BtnStart_Click;
@@ -59,7 +86,57 @@ namespace JinnoVision.User_Control
             
             btnCaptureInspect.Click += BtnCaptureInspect_Click;
         }
+        private void InitializePlc()
+        {
+            _plcService = new ModbusTcpPlcService();
 
+            _plcService.StartInspectionRequested += PlcService_StartInspectionRequested;
+            _plcService.NextStepRequested += PlcService_NextStepRequested;
+        }
+        private void AutoConnectCamera()
+        {
+            if (_cameraService != null)
+                return;
+
+            _cameraService = new HikMvsCameraService();
+            _cameraService.FrameReceived += CameraService_FrameReceived;
+
+            bool ok = _cameraService.InitializeAndOpenFirstCamera();
+
+            if (!ok)
+            {
+                lblStatus.Text = "Camera not found / open failed";
+                return;
+            }
+
+            _cameraService.Start(picCamera.Handle);
+
+            lblStatus.Text = "Camera connected + live";
+        }
+        private void PlcService_StartInspectionRequested()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(PlcService_StartInspectionRequested));
+                return;
+            }
+
+            SetPlcStatus("PLC Start Trigger Received", Color.Orange);
+            StartInspectionSequence();
+        }
+
+        private void PlcService_NextStepRequested()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(PlcService_NextStepRequested));
+                return;
+            }
+
+            SetPlcStatus("PLC Next Step Trigger Received", Color.Orange);
+
+            MoveToNextInspectionStep();
+        }
         private void BtnConnect_Click(object sender, EventArgs e)
         {
             try
@@ -151,111 +228,31 @@ namespace JinnoVision.User_Control
 
             lblStatus.Text = "Captured + inspected";
         }
+        private void BtnLoadRecipe_Click(object sender, EventArgs e)
+        {
+            if (cboRecipes.SelectedItem == null)
+            {
+                MessageBox.Show("Please select a recipe.");
+                return;
+            }
+
+            _selectedRecipe = cboRecipes.SelectedItem as RecipeModel;
+            _currentRecipe = _selectedRecipe;
+            _currentStepIndex = -1;
+
+            lblLoadedRecipe.Text = $"Loaded Recipe: {_selectedRecipe.RecipeName}";
+            lblCurrentStep.Text = "Current Step: Waiting for cobot start";
+
+            panelInspectionResults.Controls.Clear();
+        }
         private void DashboardControl_HandleCreated(object sender, EventArgs e)
         {
             if (_autoConnectStarted)
                 return;
 
             _autoConnectStarted = true;
-            AutoConnectCobotFromConfig();
         }
-        private async void CobotService_CaptureRequested()
-        {
-            if (_robotInspectionRunning)
-                return;
-
-            _robotInspectionRunning = true;
-
-            try
-            {
-                SafeUi(() =>
-                {
-                    lblCobotStatus.Text = "Robot Triggered";
-                    lblCobotStatus.BackColor = Color.Orange;
-                });
-
-                _cobotService.SetBusy();
-
-                await Task.Delay(50);
-
-                Bitmap frame = null;
-
-                // Capture on UI thread
-                BeginInvoke(new Action(() =>
-                {
-                    try
-                    {
-                        frame = _cameraService.CaptureFrame();
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine("Capture failed: " + ex.Message);
-                    }
-                }));
-
-                await Task.Delay(100);
-
-                if (frame == null)
-                {
-                    _cobotService.SetFail();
-
-                    BeginInvoke(new Action(() =>
-                    {
-                        lblCobotStatus.Text = "Capture Failed";
-                        lblCobotStatus.BackColor = Color.Red;
-                    }));
-
-                    return;
-                }
-
-                Debug.WriteLine($"Captured at {DateTime.Now:HH:mm:ss.fff}");
-
-                // Display captured frame
-                BeginInvoke(new Action(() =>
-                {
-                    if (picCapture.Image != null)
-                    {
-                        picCapture.Image.Dispose();
-                        picCapture.Image = null;
-                    }
-
-                    picCapture.Image = (Bitmap)frame.Clone();
-                }));
-
-                // TEMPORARY:
-                // For now always PASS until inspection logic is connected
-                _cobotService.SetPass();
-
-                SafeUi(() =>
-                {
-                    lblCobotStatus.Text = "Inspection PASS";
-                    lblCobotStatus.BackColor = Color.LimeGreen;
-                });
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-
-                _cobotService.SetFail();
-
-                BeginInvoke(new Action(() =>
-                {
-                    lblCobotStatus.Text = "Inspection ERROR";
-                    lblCobotStatus.BackColor = Color.Red;
-
-                    MessageBox.Show(
-                        "Robot inspection failed:\n\n" + ex.Message,
-                        "Robot Inspection",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }));
-            }
-            finally
-            {
-                _robotInspectionRunning = false;
-            }
-        }
-
+        
         private void CameraService_FrameReceived(object sender, CameraFrameEventArgs e)
         {
             if (picCamera.InvokeRequired)
@@ -270,7 +267,113 @@ namespace JinnoVision.User_Control
                 UpdatePreview(e.Frame);
             }
         }
+        private void CobotService_ProgramStartRequested()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(CobotService_ProgramStartRequested));
+                return;
+            }
 
+            string provider = ConfigurationManager.AppSettings["VisionProvider"];
+
+            //StartInspectionSequence();
+        }
+
+        private void CobotService_NextStepRequested()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(CobotService_NextStepRequested));
+                return;
+            }
+
+            MoveToNextInspectionStep();
+        }
+        private void StartInspectionSequence()
+        {
+            _currentRecipe = cboRecipes.SelectedItem as RecipeModel;
+            if (_currentRecipe == null)
+            {
+                MessageBox.Show("No recipe loaded.");
+                return;
+            }
+
+            if (_currentRecipe.Steps == null || _currentRecipe.Steps.Count == 0)
+            {
+                MessageBox.Show("Loaded recipe has no steps.");
+                return;
+            }
+            //picCapture.Image = _cameraService.CaptureFrame();
+            StartNewInspectionRunFolder();
+
+            _currentStepIndex = 0;
+            RunCurrentStepInspection();
+        }
+
+        private void MoveToNextInspectionStep()
+        {
+            if (_selectedRecipe == null)
+                return;
+
+            if (_currentStepIndex < 0)
+            {
+                StartInspectionSequence();
+                return;
+            }
+
+            _currentStepIndex++;
+
+            if (_currentStepIndex >= _selectedRecipe.Steps.Count)
+            {
+                lblCurrentStep.Text = "Inspection complete.";
+                return;
+            }
+
+            RunCurrentStepInspection();
+        }
+
+        private void RunCurrentStepInspection()
+        {
+            if (_selectedRecipe == null)
+                return;
+
+            if (_currentStepIndex < 0)
+                return;
+
+            var step = _selectedRecipe.Steps[_currentStepIndex];
+
+            lblCurrentStep.Text =
+                $"Current Step: {step.StepName}";
+
+            panelInspectionResults.Controls.Clear();
+
+            bool overallPass = true;
+
+            Bitmap frame = _cameraService.CaptureFrame();
+
+            if (frame == null)
+            {
+                lblStatus.Text = "Capture failed.";
+                return;
+            }
+
+            var old = picCapture.Image;
+            picCapture.Image = (Bitmap)frame.Clone();
+            old?.Dispose();
+
+            RunLiveInspection(frame);
+            picCapture.Invalidate();
+
+            frame.Dispose();
+            foreach (var roi in step.Rois)
+            {
+                bool pass = InspectRoi(step, roi);
+
+                if (!pass)
+                    overallPass = false;
+            }
+        }
         private void UpdatePreview(Bitmap frame)
         {
             var oldImage = picCamera.Image;
@@ -295,7 +398,13 @@ namespace JinnoVision.User_Control
             if (_currentRecipe == null)
                 return;
 
-            var step = _currentRecipe.Steps.FirstOrDefault();
+            if (_selectedRecipe == null)
+                return;
+
+            if (_currentStepIndex < 0 || _currentStepIndex >= _selectedRecipe.Steps.Count)
+                return;
+
+            var step = _selectedRecipe.Steps[_currentStepIndex];
 
             if (step == null)
                 return;
@@ -313,7 +422,7 @@ namespace JinnoVision.User_Control
                     roi.Width,
                     roi.Height);
 
-                Rectangle pbRect = TranslateToPictureBoxRect(picCamera, imageRect);
+                Rectangle pbRect = TranslateToPictureBoxRect(picCapture, imageRect);
 
                 Color color = GetResultColor(result.FinalResult);
 
@@ -329,9 +438,32 @@ namespace JinnoVision.User_Control
                     color);
             }
         }
+        private Color GetResultColor(string result)
+        {
+            switch (result?.ToUpperInvariant())
+            {
+                case "PASS":
+                    return Color.FromArgb(0, 180, 0);
+
+                case "FAIL":
+                    return Color.FromArgb(220, 0, 0);
+
+                default:
+                    return Color.FromArgb(255, 140, 0);
+            }
+        }
         private void RunLiveInspection(Bitmap frame)
         {
-            var step = _currentRecipe.Steps.FirstOrDefault();
+            if (_selectedRecipe == null)
+                return;
+
+            if (_currentStepIndex < 0 || _currentStepIndex >= _selectedRecipe.Steps.Count)
+                return;
+
+            var step = _selectedRecipe.Steps[_currentStepIndex];
+
+            if (step == null || step.Rois == null || step.Rois.Count == 0)
+                return;
 
             var rois = step.Rois.Select(r => new RecipeRoi
             {
@@ -345,7 +477,6 @@ namespace JinnoVision.User_Control
             }).ToList();
 
             _lastInspectionResults = _inspectionEngine.InspectFrame(frame, rois);
-
         }
 
         private void InitializeInspection()
@@ -364,26 +495,200 @@ namespace JinnoVision.User_Control
                     MessageBoxIcon.Error);
             }
         }
+        private void LoadRecipeDropdown()
+        {
+            cboRecipes.Items.Clear();
 
-        private void LoadLatestRecipeForInspection()
-        {
-            _currentRecipe = _recipeStorageService.LoadMostRecentRecipe();
+            var recipes = _recipeStorageService.LoadAllRecipes();
+
+            foreach (var recipe in recipes)
+            {
+                cboRecipes.Items.Add(recipe);
+            }
+
+            cboRecipes.DisplayMember = "RecipeName";
+
+            if (cboRecipes.Items.Count > 0)
+                cboRecipes.SelectedIndex = 0;
         }
-        private Color GetResultColor(string result)
+        private bool InspectRoi(InspectionStepModel step, RoiInfoModel roi)
         {
-            switch (result)
+            try
+            {
+                if (_cameraService == null)
+                    return false;
+
+                Bitmap frame = _cameraService.CaptureFrame();
+                if (frame == null)
+                    return false;
+
+                using (frame)
+                {
+                    var recipeRoi = new RecipeRoi
+                    {
+                        Name = roi.RoiId,
+                        ComponentName = roi.ComponentName,
+                        X = roi.X,
+                        Y = roi.Y,
+                        Width = roi.Width,
+                        Height = roi.Height,
+                        Threshold = roi.ConfidenceThreshold / 100f
+                    };
+
+                    var results = _inspectionEngine.InspectFrame(
+                        frame,
+                        new List<RecipeRoi> { recipeRoi });
+
+                    var result = results.FirstOrDefault();
+
+                    if (result == null)
+                        return false;
+
+                    bool pass = result.FinalResult == "PASS";
+
+                    AddInspectionResultRow(
+                        step.StepName,
+                        roi,
+                        result);
+
+                    return pass;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+
+                AddInspectionErrorRow(
+                    step.StepName,
+                    roi,
+                    ex.Message);
+
+                return false;
+            }
+        }
+        private void AddInspectionResultRow(
+    string stepName,
+    RoiInfoModel roi,
+    InspectionResult result)
+        {
+            Color backColor;
+
+            switch (result.FinalResult)
             {
                 case "PASS":
-                    return Color.LimeGreen;
+                    backColor = Color.FromArgb(220, 255, 220);
+                    break;
+
                 case "FAIL":
-                    return Color.Red;
-                case "UNCERTAIN":
-                    return Color.Gold;
-                case "WRONG COMPONENT":
-                    return Color.OrangeRed;
+                    backColor = Color.FromArgb(255, 220, 220);
+                    break;
+
                 default:
-                    return Color.White;
+                    backColor = Color.FromArgb(255, 245, 200);
+                    break;
             }
+
+            var lbl = new Label
+            {
+                AutoSize = false,
+                Width = panelInspectionResults.Width - 30,
+                Height = 40,
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(10, 0, 0, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = backColor,
+                ForeColor = Color.Black,
+                Text =
+                    $"{stepName} | {roi.RoiName} | {roi.ComponentName} | " +
+                    $"{result.FinalResult} ({result.Confidence:P0})"
+            };
+
+            panelInspectionResults.Controls.Add(lbl);
+        }
+        private void AddInspectionErrorRow(
+    string stepName,
+    RoiInfoModel roi,
+    string error)
+        {
+            var lbl = new Label
+            {
+                AutoSize = false,
+                Width = panelInspectionResults.Width - 30,
+                Height = 40,
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(10, 0, 0, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = Color.FromArgb(255, 220, 220),
+                ForeColor = Color.Black,
+                Text =
+                    $"{stepName} | {roi.RoiName} | ERROR | {error}"
+            };
+
+            panelInspectionResults.Controls.Add(lbl);
+        }
+        private void StartNewInspectionRunFolder()
+        {
+            if (_selectedRecipe == null)
+                return;
+
+            string baseFolder = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "InspectionRuns");
+
+            string safeRecipeName = MakeSafeFileName(_selectedRecipe.RecipeName);
+
+            string runName =
+                $"{DateTime.Now:yyyyMMdd_HHmmss}_{safeRecipeName}_{_selectedRecipe.RecipeId}";
+
+            _currentRunFolder = Path.Combine(baseFolder, runName);
+
+            Directory.CreateDirectory(_currentRunFolder);
+
+            _captureSequence = 0;
+
+            File.WriteAllText(
+                Path.Combine(_currentRunFolder, "run_log.txt"),
+                $"Run Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                $"Recipe ID: {_selectedRecipe.RecipeId}{Environment.NewLine}" +
+                $"Recipe Name: {_selectedRecipe.RecipeName}{Environment.NewLine}");
+        }
+        private string MakeSafeFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "Unnamed";
+
+            foreach (char c in Path.GetInvalidFileNameChars())
+            {
+                value = value.Replace(c, '_');
+            }
+
+            return value.Trim();
+        }
+        private string SaveInspectionCapture(Bitmap frame, InspectionStepModel step)
+        {
+            if (frame == null)
+                return null;
+
+            if (string.IsNullOrWhiteSpace(_currentRunFolder))
+                StartNewInspectionRunFolder();
+
+            _captureSequence++;
+
+            string stepName = MakeSafeFileName(step.StepName);
+
+            string fileName =
+                $"{_captureSequence:000}_Step{step.StepNo}_{stepName}_{DateTime.Now:HHmmssfff}.png";
+
+            string path = Path.Combine(_currentRunFolder, fileName);
+
+            frame.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+            File.AppendAllText(
+                Path.Combine(_currentRunFolder, "run_log.txt"),
+                $"Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | " +
+                $"Step {step.StepNo} - {step.StepName} | {fileName}{Environment.NewLine}");
+
+            return path;
         }
         private void DrawLabel(Graphics g, string text, Rectangle rect, Color backColor)
         {
@@ -447,56 +752,68 @@ namespace JinnoVision.User_Control
 
             return new Rectangle(x, y, w, h);
         }
-        private void AutoConnectCobotFromConfig()
+        private void AutoConnectPlc()
         {
-            bool autoConnect = false;
-
-            bool.TryParse(
-                ConfigurationManager.AppSettings["AutoConnectJakaCobot"],
-                out autoConnect);
-
-            if (!autoConnect)
-            {
-                lblCobotStatus.Text = "JAKA Auto Connect Disabled";
-                lblCobotStatus.BackColor = Color.Gray;
-                return;
-            }
-
-            string ip =
-                ConfigurationManager.AppSettings["JakaCobotIp"];
-
-            int port = 502;
-
-            int.TryParse(
-                ConfigurationManager.AppSettings["JakaCobotPort"],
-                out port);
-
-            if (string.IsNullOrWhiteSpace(ip))
-            {
-                lblCobotStatus.Text = "JAKA IP Missing";
-                lblCobotStatus.BackColor = Color.Red;
-                return;
-            }
+            string ip = "192.168.1.80";
+            int port = 513;
 
             try
             {
+                _plcService.Connect(ip, port);
+                _plcService.StartListening();
+
+                lblPlcStatus.Text = "PLC Connected";
+                lblPlcStatus.BackColor = Color.LimeGreen;
+            }
+            catch (Exception ex)
+            {
+                lblPlcStatus.Text = "PLC Connection Failed";
+                lblPlcStatus.BackColor = Color.Red;
+
+                MessageBox.Show(ex.Message);
+            }
+        }
+        private void SetPlcStatus(string text, Color color)
+        {
+            if (lblPlcStatus == null)
+                return;
+
+            lblPlcStatus.Text = text;
+            lblPlcStatus.BackColor = color;
+            lblPlcStatus.ForeColor = Color.White;
+        }
+        private void InitializeCobot()
+        {
+            _cobotService = new JakaCobotService();
+
+            _cobotService.ProgramStartRequested +=
+                CobotService_ProgramStartRequested;
+
+            _cobotService.NextStepRequested +=
+                CobotService_NextStepRequested;
+        }
+        private void AutoConnectCobotFromConfig()
+        {
+            try
+            {
+                string ip =
+                    ConfigurationManager.AppSettings["CobotIp"];
+
+                int port =
+                    int.Parse(
+                        ConfigurationManager.AppSettings["CobotPort"]);
+
                 _cobotService.Connect(ip, port);
-
                 _cobotService.StartListening();
-
-                lblCobotStatus.Text = "JAKA Connected";
+                lblCobotStatus.Text = "Cobot Connected";
                 lblCobotStatus.BackColor = Color.LimeGreen;
             }
             catch (Exception ex)
             {
-                lblCobotStatus.Text = "JAKA Connection Failed";
+                lblCobotStatus.Text = "Cobot Connection Failed";
                 lblCobotStatus.BackColor = Color.Red;
 
-                MessageBox.Show(
-                    "Failed to connect to JAKA cobot.\n\n" + ex.Message,
-                    "JAKA Connection",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message);
             }
         }
         private void DashboardControl_Disposed(object sender, EventArgs e)
@@ -507,19 +824,6 @@ namespace JinnoVision.User_Control
                 _cameraService.Dispose();
                 _cameraService = null;
             }
-        }
-        private void SafeUi(Action action)
-        {
-            if (IsDisposed || Disposing)
-                return;
-
-            if (!IsHandleCreated)
-                return;
-
-            if (InvokeRequired)
-                BeginInvoke(action);
-            else
-                action();
         }
     }
 }

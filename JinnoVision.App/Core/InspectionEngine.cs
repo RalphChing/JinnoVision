@@ -67,11 +67,12 @@ namespace JinnoVision.App.Core
 
                 string finalResult;
 
-                if (predictedComponent != roi.ComponentName)
-                {
-                    finalResult = "WRONG COMPONENT";
-                }
-                else if (prediction.Confidence < roi.Threshold)
+                //if (predictedComponent != roi.ComponentName)
+                //{
+                //    finalResult = "WRONG COMPONENT";
+                //}
+                //else
+                if (prediction.Confidence < roi.Threshold)
                 {
                     finalResult = "UNCERTAIN";
                 }
