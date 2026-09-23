@@ -47,6 +47,9 @@
     <Reference Include="MvCameraControl.Net">
       <HintPath>..\JinnoVision\bin\Debug\MvCameraControl.Net.dll</HintPath>
     </Reference>
+    <Reference Include="MVTec.HalconDotNet, Version=25110.0.0.0, Culture=neutral, PublicKeyToken=4973bed59ddbf2b8, processorArchitecture=MSIL">
+      <HintPath>..\packages\MVTec.HalconDotNet.25110.0.0\lib\netstandard2.0\MVTec.HalconDotNet.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
@@ -94,6 +97,13 @@
     <Compile Include="Models\RecipeRoi.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\AuthService.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\GcadDataStager.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\GcadEvaluationMetrics.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\GcadInferenceService.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\GcadTrainingConfig.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\GcadTrainingException.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\HalconGcadTrainer.cs" />
+    <Compile Include="Services\GcadAnomalyDetection\IGcadTrainer.cs" />
     <Compile Include="Services\OnnxClassifier.cs" />
     <Compile Include="Services\TrainingService.cs" />
   </ItemGroup>

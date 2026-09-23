@@ -1,0 +1,14 @@
+{
+  "RoiId": "ROI_001",
+  "RoiName": "ROI 1",
+  "ComponentName": "11",
+  "X": 351,
+  "Y": 457,
+  "Width": 236,
+  "Height": 288,
+  "RoiType": null,
+  "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\11\\Pass\\ROI_001_20260919_083722414.png",
+  "TargetClassName": "OK",
+  "Classification": "PASS",
+  "ConfidenceThreshold": 85
+}

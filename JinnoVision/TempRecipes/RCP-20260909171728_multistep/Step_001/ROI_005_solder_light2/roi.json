@@ -1,0 +1,14 @@
+{
+  "RoiId": "ROI_005",
+  "RoiName": "solder_light2",
+  "ComponentName": "SolderJoint",
+  "X": 2808,
+  "Y": 1459,
+  "Width": 357,
+  "Height": 255,
+  "RoiType": null,
+  "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\SolderJoint\\Pass\\ROI_005_20260603_172042702.png",
+  "TargetClassName": "OK",
+  "Classification": "PASS",
+  "ConfidenceThreshold": 85
+}

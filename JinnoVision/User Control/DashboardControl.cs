@@ -1,6 +1,7 @@
 ﻿using JinnoVision.App.Core;
 using JinnoVision.App.Models;
 using JinnoVision.App.Services;
+using JinnoVision.App.Services.Vision.GcadAnomalyDetection; // GCAD: added
 using JinnoVision.Models;
 using JinnoVision.Services;
 using JinnoVision.Services.Camera;
@@ -51,6 +52,14 @@ namespace JinnoVision.User_Control
         private string _currentRunFolder;
         private int _captureSequence;
 
+        // GCAD: board-level anomaly detection, separate from the per-ROI ONNX classifier above.
+        // Loaded once (if a trained/exported model is configured); null-safe everywhere it's used
+        // so the app still runs normally before a model is available.
+        private GcadInferenceService _gcadService;
+        private GcadInspectionResult _lastGcadResult;
+        private Button _btnGcadTest; // GCAD: field so the click handler can update its Text/color
+        private Button _btnGcadUploadTest; // GCAD: same, for the file-upload test button below
+
         public DashboardControl()
         {
             InitializeComponent();
@@ -83,8 +92,152 @@ namespace JinnoVision.User_Control
             btnStart.Click += BtnStart_Click;
             btnStop.Click += BtnStop_Click;
             this.Disposed += DashboardControl_Disposed;
-            
+
             btnCaptureInspect.Click += BtnCaptureInspect_Click;
+
+            AddTemporaryGcadTestButton(); // GCAD: throwaway button, safe to delete once validated
+        }
+
+        // GCAD: temporary, code-created button for isolated end-to-end testing with the live
+        // webcam -- skips the ONNX/ROI pipeline entirely (no recipe/step setup required beyond
+        // having loaded a recipe with a GCAD model configured). Not added via the Designer, so
+        // removing this is just deleting this method and its call in the constructor above.
+        private void AddTemporaryGcadTestButton()
+        {
+            _btnGcadTest = new Button
+            {
+                Text = "[TEST] GCAD Capture",
+                BackColor = Color.Orange,
+                ForeColor = Color.Black,
+                AutoSize = true,
+                Location = new Point(10, 10) // adjust if this overlaps an existing control
+            };
+
+            _btnGcadTest.Click += BtnGcadTest_Click;
+
+            this.Controls.Add(_btnGcadTest);
+            _btnGcadTest.BringToFront();
+
+            // GCAD: second temporary button -- runs the same GCAD-only inspection but on a
+            // file-picked image instead of a live camera frame. Useful for testing specific known
+            // good/bad images, or testing without a camera connected at all. Positioned just
+            // below the capture button; adjust Location if it overlaps anything.
+            _btnGcadUploadTest = new Button
+            {
+                Text = "[TEST] GCAD Upload Image",
+                BackColor = Color.Orange,
+                ForeColor = Color.Black,
+                AutoSize = true,
+                Location = new Point(10, _btnGcadTest.Bottom + 6)
+            };
+
+            _btnGcadUploadTest.Click += BtnGcadUploadTest_Click;
+
+            this.Controls.Add(_btnGcadUploadTest);
+            _btnGcadUploadTest.BringToFront();
+        }
+
+        private void BtnGcadTest_Click(object sender, EventArgs e)
+        {
+            if (_cameraService == null)
+            {
+                MessageBox.Show("Camera not connected.");
+                return;
+            }
+
+            if (_gcadService == null)
+            {
+                MessageBox.Show("No GCAD model loaded. Load a recipe with GcadModelPath configured first.");
+                return;
+            }
+
+            Bitmap frame = _cameraService.CaptureFrame();
+
+            if (frame == null)
+            {
+                MessageBox.Show("Failed to capture frame.");
+                return;
+            }
+
+            var old = picCapture.Image;
+            picCapture.Image = (Bitmap)frame.Clone();
+            old?.Dispose();
+
+            RunGcadInspection(frame); // GCAD only -- no RunLiveInspection here
+
+            picCapture.Invalidate();
+
+            frame.Dispose();
+
+            ShowGcadTestResultOnButton(_btnGcadTest);
+
+            lblStatus.Text = "GCAD test capture complete";
+        }
+
+        private void BtnGcadUploadTest_Click(object sender, EventArgs e)
+        {
+            if (_gcadService == null)
+            {
+                MessageBox.Show("No GCAD model loaded. Load a recipe with GcadModelPath configured first.");
+                return;
+            }
+
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "Image Files|*.bmp;*.png;*.jpg;*.jpeg;*.tif;*.tiff";
+
+                if (ofd.ShowDialog() != DialogResult.OK)
+                    return;
+
+                Bitmap uploaded;
+                try
+                {
+                    uploaded = new Bitmap(ofd.FileName);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not load image: {ex.Message}");
+                    return;
+                }
+
+                using (uploaded)
+                {
+                    var old = picCapture.Image;
+                    picCapture.Image = (Bitmap)uploaded.Clone();
+                    old?.Dispose();
+
+                    RunGcadInspection(uploaded); // GCAD only -- same as the capture button
+
+                    picCapture.Invalidate();
+                }
+            }
+
+            ShowGcadTestResultOnButton(_btnGcadUploadTest);
+
+            lblStatus.Text = "GCAD test (uploaded image) complete";
+        }
+
+        // GCAD: shared result display for both temporary test buttons -- feedback goes on
+        // whichever button was clicked, not a popup, so repeated test clicks (camera or file)
+        // don't require dismissing a MessageBox each time.
+        private void ShowGcadTestResultOnButton(Button targetButton)
+        {
+            if (_lastGcadResult != null)
+            {
+                targetButton.Text = _lastGcadResult.IsAnomaly
+                    ? $"FAIL ({_lastGcadResult.AnomalyScore:F3})"
+                    : $"PASS ({_lastGcadResult.AnomalyScore:F3})";
+                targetButton.BackColor = _lastGcadResult.IsAnomaly
+                    ? Color.FromArgb(220, 0, 0)
+                    : Color.FromArgb(0, 180, 0);
+                targetButton.ForeColor = Color.White;
+            }
+            else
+            {
+                targetButton.Text = "ERROR (see Output window)";
+                targetButton.BackColor = Color.Red;
+                targetButton.ForeColor = Color.White;
+            }
         }
         private void InitializePlc()
         {
@@ -98,20 +251,26 @@ namespace JinnoVision.User_Control
             if (_cameraService != null)
                 return;
 
-            _cameraService = new HikMvsCameraService();
+            // Use webcam for testing
+            _cameraService = new WebcamCameraService();
             _cameraService.FrameReceived += CameraService_FrameReceived;
 
             bool ok = _cameraService.InitializeAndOpenFirstCamera();
 
+            // Original hardware camera (commented):
+            // _cameraService = new HikMvsCameraService();
+            // _cameraService.FrameReceived += CameraService_FrameReceived;
+            // bool ok = _cameraService.InitializeAndOpenFirstCamera();
+
             if (!ok)
             {
-                lblStatus.Text = "Camera not found / open failed";
+                lblStatus.Text = "Webcam not found / open failed";
                 return;
             }
 
             _cameraService.Start(picCamera.Handle);
 
-            lblStatus.Text = "Camera connected + live";
+            lblStatus.Text = "Webcam connected + live";
         }
         private void PlcService_StartInspectionRequested()
         {
@@ -142,11 +301,24 @@ namespace JinnoVision.User_Control
             try
             {
                 _cameraService?.Dispose();
-                _cameraService = new HikMvsCameraService();
+
+                // Instantiate webcam for quick testing
+                _cameraService = new WebcamCameraService();
                 _cameraService.FrameReceived += CameraService_FrameReceived;
 
                 bool ok = _cameraService.InitializeAndOpenFirstCamera();
-                lblStatus.Text = ok ? "Camera connected" : "Camera not found / open failed";
+
+                // Original hardware camera connect (commented out)
+                // _cameraService = new HikMvsCameraService();
+                // _cameraService.FrameReceived += CameraService_FrameReceived;
+                // bool ok = _cameraService.InitializeAndOpenFirstCamera();
+
+                if (ok)
+                {
+                    _cameraService.Start(picCamera.Handle);
+                }
+
+                lblStatus.Text = ok ? "Webcam connected" : "Webcam not found / open failed";
             }
             catch (Exception ex)
             {
@@ -221,6 +393,7 @@ namespace JinnoVision.User_Control
             old?.Dispose();
 
             RunLiveInspection(frame);
+            RunGcadInspection(frame); // GCAD: board-level check on the same captured frame
 
             picCapture.Invalidate();
 
@@ -244,6 +417,44 @@ namespace JinnoVision.User_Control
             lblCurrentStep.Text = "Current Step: Waiting for cobot start";
 
             panelInspectionResults.Controls.Clear();
+
+            LoadGcadModelForRecipe(_selectedRecipe); // GCAD: swap in this board's model
+        }
+
+        // GCAD: each recipe is a different physical board, so each needs its own trained model --
+        // a model trained on one board's "normal" appearance is meaningless applied to another.
+        // Requires RecipeModel to have GcadModelPath (string) and GcadAnomalyThreshold (double)
+        // properties -- add these alongside the existing per-recipe Steps/Rois data, wherever
+        // RecipeModel and RecipeStorageService define and persist recipe fields.
+        private void LoadGcadModelForRecipe(RecipeModel recipe)
+        {
+            // Dispose the previous recipe's model before loading the new one -- otherwise each
+            // recipe switch leaks a loaded HALCON model handle.
+            _gcadService?.Dispose();
+            _gcadService = null;
+            _lastGcadResult = null;
+
+            if (recipe == null)
+                return;
+
+            string modelPath = recipe.GcadModelPath;
+
+            if (string.IsNullOrWhiteSpace(modelPath) || !File.Exists(modelPath))
+            {
+                Debug.WriteLine($"GCAD model not configured or not found for recipe '{recipe.RecipeName}' -- GCAD inspection disabled for this recipe.");
+                return;
+            }
+
+            try
+            {
+                _gcadService = new GcadInferenceService();
+                _gcadService.LoadModel(modelPath, recipe.GcadAnomalyThreshold);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GCAD model failed to load for recipe '{recipe.RecipeName}': {ex.Message}");
+                _gcadService = null;
+            }
         }
         private void DashboardControl_HandleCreated(object sender, EventArgs e)
         {
@@ -252,7 +463,7 @@ namespace JinnoVision.User_Control
 
             _autoConnectStarted = true;
         }
-        
+
         private void CameraService_FrameReceived(object sender, CameraFrameEventArgs e)
         {
             if (picCamera.InvokeRequired)
@@ -363,6 +574,7 @@ namespace JinnoVision.User_Control
             old?.Dispose();
 
             RunLiveInspection(frame);
+            RunGcadInspection(frame); // GCAD: board-level check on the same captured frame
             picCapture.Invalidate();
 
             frame.Dispose();
@@ -380,6 +592,11 @@ namespace JinnoVision.User_Control
             picCamera.Image = frame;
             oldImage?.Dispose();
 
+            // GCAD note: intentionally NOT calling RunGcadInspection here. This fires on every
+            // live camera frame (FrameReceived callback rate), and a deep-learning inference call
+            // on every frame would hammer the UI thread. GCAD only runs at the actual capture
+            // points (BtnCaptureInspect_Click, RunCurrentStepInspection), same as the pattern
+            // below for the existing ONNX inspection.
             if (_inspectionEngine != null && _currentRecipe != null)
             {
                 using (Bitmap inspectionFrame = new Bitmap(frame))
@@ -479,6 +696,49 @@ namespace JinnoVision.User_Control
             _lastInspectionResults = _inspectionEngine.InspectFrame(frame, rois);
         }
 
+        // GCAD: board-level anomaly check on a single captured frame. Safe to call even when
+        // no model is loaded yet (no-ops). Does not depend on a recipe/ROI being selected, since
+        // GCAD scores the whole board rather than named regions.
+        private void RunGcadInspection(Bitmap frame)
+        {
+            if (_gcadService == null)
+                return;
+
+            try
+            {
+                _lastGcadResult = _gcadService.Inspect(frame);
+                AddGcadResultRow(_lastGcadResult);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("GCAD inspection failed: " + ex.Message);
+            }
+        }
+
+        // GCAD: mirrors AddInspectionResultRow's styling for the existing per-ROI results.
+        private void AddGcadResultRow(GcadInspectionResult result)
+        {
+            Color backColor = result.IsAnomaly
+                ? Color.FromArgb(255, 220, 220)
+                : Color.FromArgb(220, 255, 220);
+
+            var lbl = new Label
+            {
+                AutoSize = false,
+                Width = panelInspectionResults.Width - 30,
+                Height = 40,
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(10, 0, 0, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = backColor,
+                ForeColor = Color.Black,
+                Text = $"Board-level (GCAD) | {(result.IsAnomaly ? "FAIL" : "PASS")} | " +
+                       $"score {result.AnomalyScore:F3} (threshold {result.Threshold:F3})"
+            };
+
+            panelInspectionResults.Controls.Add(lbl);
+        }
+
         private void InitializeInspection()
         {
             try
@@ -494,6 +754,10 @@ namespace JinnoVision.User_Control
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+
+            // GCAD: no model loaded here -- each recipe is a different board design and needs its
+            // own model, so loading happens in LoadGcadModelForRecipe when a recipe is selected,
+            // not at startup. _gcadService stays null until then.
         }
         private void LoadRecipeDropdown()
         {
@@ -824,6 +1088,10 @@ namespace JinnoVision.User_Control
                 _cameraService.Dispose();
                 _cameraService = null;
             }
+
+            // GCAD: dispose alongside the camera service.
+            _gcadService?.Dispose();
+            _gcadService = null;
         }
     }
 }

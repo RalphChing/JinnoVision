@@ -1,6 +1,9 @@
-﻿using JinnoVision.App.Core;
+﻿using EasyModbus;
+using HalconDotNet;
+using JinnoVision.App.Core;
 using JinnoVision.App.Models;
 using JinnoVision.App.Services;
+using JinnoVision.App.Services.Vision.GcadAnomalyDetection;
 using JinnoVision.Models;
 using JinnoVision.Services.Camera;
 using JinnoVision.Services.Setup;
@@ -12,7 +15,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using EasyModbus;
 
 namespace JinnoVision.User_Control
 {
@@ -60,6 +62,7 @@ namespace JinnoVision.User_Control
         private bool _isDraggingPendingRoi;
         private Point _dragStartPoint;
         private Rectangle _dragStartRect;
+        private Label lblStatus;
 
         private ICameraService _cameraService;
         private Button btnCaptureSetupFrame;
@@ -96,7 +99,6 @@ namespace JinnoVision.User_Control
             this.Disposed += SetupControl_Disposed;
 
         }
-
         private void WireEvents()
         {
             btnNewRecipe.Click += BtnNewRecipe_Click;
@@ -200,6 +202,11 @@ namespace JinnoVision.User_Control
                 Text = "Recipe Name",
                 Location = new Point(20, 15),
                 AutoSize = true
+            };
+
+            lblStatus = new Label
+            {
+                Location = new Point(20, 75),
             };
 
             txtRecipeName = new TextBox
@@ -694,6 +701,72 @@ namespace JinnoVision.User_Control
                 btnRetrainModel.Text = "Retrain Model";
             }
         }
+
+        private async void BtnTrainGcadModel_Click(object sender, EventArgs e)
+        {
+            if (_currentRecipe == null)
+            {
+                MessageBox.Show("Please create or select a recipe first.");
+                return;
+            }
+
+            btnRetrainModel.Enabled = false;
+            btnRetrainModel.Text = "Training GCAD...";
+
+            try
+            {
+                var recipeStoragePath = Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "TrainingData",
+                    _currentRecipe.RecipeId);
+
+                var trainingService = new TrainingService(_currentRecipe.RecipeId);
+                var config = new GcadTrainingConfig
+                {
+                    RecipeId = _currentRecipe.RecipeId,
+                    NumEpochs = 50,
+                    BatchSize = 32,
+                    GcAnomalyNetworks = "both"
+                };
+
+                var metrics = await trainingService.TrainGcadModelAsync(
+                    _currentRecipe.RecipeId,
+                    recipeStoragePath,
+                    config,
+                    progressMessage =>
+                    {
+                        if (InvokeRequired)
+                            Invoke(new Action(() => { lblStatus.Text = progressMessage; }));
+                        else
+                            lblStatus.Text = progressMessage;
+                    });
+
+                MessageBox.Show(
+                    $"GCAD Model Training Complete\n\n" +
+                    $"Board-level Recall (Catch Rate): {metrics.Recall:P2}\n" +
+                    $"Board-level Precision: {metrics.Precision:P2}\n" +
+                    $"False Positive Rate: {metrics.FalsePositiveRate:P2}\n" +
+                    $"Meets 90% Target: {metrics.MeetsReliabilityTarget}\n\n" +
+                    $"Recommended Threshold: {metrics.RecommendedThreshold:F4}",
+                    "GCAD Training Report",
+                    MessageBoxButtons.OK,
+                    metrics.MeetsReliabilityTarget ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"GCAD Training Failed:\n\n{ex.Message}",
+                    "Training Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnRetrainModel.Enabled = true;
+                btnRetrainModel.Text = "Retrain Model";
+            }
+        }
+
         private void BtnCaptureSetupFrame_Click(object sender, EventArgs e)
         {
             if (_cameraService == null)
@@ -1764,21 +1837,47 @@ namespace JinnoVision.User_Control
             {
                 StopAndDisconnectSetupCamera();
 
-                _cameraService = new HikMvsCameraService();
+                // Use webcam for testing (AForge.Video.DirectShow based)
+                _cameraService = new WebcamCameraService();
+                _cameraService.FrameReceived += (s, e) =>
+                {
+                    if (picRoiImage.InvokeRequired)
+                    {
+                        picRoiImage.BeginInvoke(new Action(() =>
+                        {
+                            var old = picRoiImage.Image;
+                            picRoiImage.Image = e.Frame;
+                            old?.Dispose();
+                        }));
+                    }
+                    else
+                    {
+                        var old = picRoiImage.Image;
+                        picRoiImage.Image = e.Frame;
+                        old?.Dispose();
+                    }
+                };
 
                 bool opened = _cameraService.InitializeAndOpenFirstCamera();
 
+                // Original (hardware) camera code commented out:
+                // _cameraService = new HikMvsCameraService();
+                // bool opened = _cameraService.InitializeAndOpenFirstCamera();
+
                 if (!opened)
                 {
-                    MessageBox.Show("Camera not found.");
+                    MessageBox.Show("Webcam not found / open failed.");
                     return;
                 }
 
                 bool started = _cameraService.Start(picRoiImage.Handle);
 
+                // Original Start for hardware camera (commented):
+                // bool started = _cameraService.Start(picRoiImage.Handle);
+
                 if (!started)
                 {
-                    MessageBox.Show("Failed to start camera.");
+                    MessageBox.Show("Failed to start webcam.");
                     return;
                 }
 

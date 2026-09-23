@@ -1,0 +1,49 @@
+{
+  "StepNo": 3,
+  "StepName": "Step 3",
+  "ImagePath": null,
+  "Rois": [
+    {
+      "RoiId": "ROI_001",
+      "RoiName": "ROI 1",
+      "ComponentName": "steproitest",
+      "X": 671,
+      "Y": 26,
+      "Width": 272,
+      "Height": 219,
+      "RoiType": null,
+      "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\steproitest\\Pass\\ROI_001_20260518_145102345.png",
+      "TargetClassName": "OK",
+      "Classification": "PASS",
+      "ConfidenceThreshold": 85
+    },
+    {
+      "RoiId": "ROI_002",
+      "RoiName": "ROI 2",
+      "ComponentName": "steproitest",
+      "X": 539,
+      "Y": 345,
+      "Width": 309,
+      "Height": 225,
+      "RoiType": null,
+      "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\steproitest\\Pass\\ROI_002_20260518_145108202.png",
+      "TargetClassName": "OK",
+      "Classification": "PASS",
+      "ConfidenceThreshold": 85
+    },
+    {
+      "RoiId": "ROI_003",
+      "RoiName": "ROI 3",
+      "ComponentName": "steproitest",
+      "X": 108,
+      "Y": 177,
+      "Width": 280,
+      "Height": 273,
+      "RoiType": null,
+      "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\steproitest\\Pass\\ROI_003_20260518_145114823.png",
+      "TargetClassName": "OK",
+      "Classification": "PASS",
+      "ConfidenceThreshold": 85
+    }
+  ]
+}

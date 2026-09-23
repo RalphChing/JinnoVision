@@ -1,0 +1,14 @@
+{
+  "RoiId": "ROI_004",
+  "RoiName": "solder_overfill",
+  "ComponentName": "SolderJoint",
+  "X": 2830,
+  "Y": 1254,
+  "Width": 328,
+  "Height": 233,
+  "RoiType": null,
+  "ImagePath": "C:\\Users\\user\\source\\repos\\JinnoVision\\JinnoVision\\TrainingData\\SolderJoint\\Fail\\ROI_004_20260603_172019568.png",
+  "TargetClassName": "NG",
+  "Classification": "FAIL",
+  "ConfidenceThreshold": 85
+}
